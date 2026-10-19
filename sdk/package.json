@@ -1,0 +1,35 @@
+{
+  "name": "@zero-two-labs/sekisho",
+  "version": "0.1.0",
+  "description": "x402 payments with automatic revenue split on Avalanche",
+  "main": "dist/index.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "example:read": "tsx examples/read-config.ts",
+    "example:seller": "node --env-file=.env --import tsx examples/seller-server.ts",
+    "example:agent": "node --env-file=.env --import tsx examples/agent-pay.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "@x402/fetch": "^2.28.0",
+    "viem": "^2.57.7"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@types/node": "^26.6.5",
+    "@x402/core": "^2.28.0",
+    "@x402/evm": "^2.28.0",
+    "@x402/hono": "^2.28.0",
+    "hono": "^4.13.13",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
