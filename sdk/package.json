@@ -1,6 +1,6 @@
 {
   "name": "@zero-two-labs/sekisho",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "x402 payments with automatic revenue split on Avalanche",
   "main": "dist/index.js",
   "directories": {
@@ -12,15 +12,26 @@
     "example:read": "tsx examples/read-config.ts",
     "example:seller": "node --env-file=.env --import tsx examples/seller-server.ts",
     "example:agent": "node --env-file=.env --import tsx examples/agent-pay.ts",
-    "example:mcp": "node --env-file=.env --import tsx examples/agent-mcp.ts"
+    "example:mcp": "node --env-file=.env --import tsx examples/agent-mcp.ts",
+    "prepublishOnly": "npm run build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "x402",
+    "avalanche",
+    "ai-agents",
+    "mcp",
+    "payments",
+    "usdc",
+    "revenue-split"
+  ],
+  "author": "Zero Two Labs",
+  "license": "MIT",
   "type": "module",
   "types": "dist/index.d.ts",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "@x402/core": "^2.28.0",
+    "@x402/evm": "^2.28.0",
     "@x402/fetch": "^2.28.0",
     "@x402/mcp": "^2.28.0",
     "viem": "^2.57.7",
@@ -29,11 +40,30 @@
   "devDependencies": {
     "@hono/node-server": "^2.1.5",
     "@types/node": "^26.6.5",
-    "@x402/core": "^2.28.0",
-    "@x402/evm": "^2.28.0",
     "@x402/hono": "^2.28.0",
     "hono": "^4.13.13",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usainbluntmx/sekisho.git"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
