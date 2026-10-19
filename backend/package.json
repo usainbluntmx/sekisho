@@ -1,0 +1,38 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "coverage": "hardhat coverage",
+    "deploy:local": "hardhat deploy --network localhost",
+    "node": "hardhat node",
+    "clean": "hardhat clean",
+    "deploy:avalancheFuji": "hardhat deploy --network avalancheFuji",
+    "deploy:avalanche": "hardhat deploy --network avalanche"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-network-helpers": "^1.1.2",
+    "@nomicfoundation/hardhat-toolbox": "^6.1.2",
+    "@openzeppelin/contracts": "^5.6.1",
+    "@typechain/ethers-v6": "^0.5.1",
+    "@typechain/hardhat": "^9.1.0",
+    "@types/node": "^24.9.2",
+    "dotenv": "^17.4.2",
+    "hardhat": "^2.28.6",
+    "hardhat-deploy": "^0.12.4",
+    "hardhat-deploy-ethers": "^0.4.2",
+    "hardhat-gas-reporter": "^2.3.0",
+    "prettier": "^3.9.6",
+    "prettier-plugin-solidity": "^2.4.1",
+    "solhint": "^6.2.3",
+    "solidity-coverage": "^0.8.17",
+    "typechain": "^8.3.2"
+  }
+}
