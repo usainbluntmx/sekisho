@@ -4,13 +4,16 @@ import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { parseUnits, type LocalAccount } from "viem";
 import { NETWORKS, type SekishoNetwork } from "./chains.js";
 
-export interface SekishoFetchOptions {
+export interface SekishoAgentOptions {
   /** Cuenta del agente que firma los pagos (viem LocalAccount). */
   account: LocalAccount;
   network?: SekishoNetwork;
   /** Máximo a pagar por petición, en USD. Por defecto "1". */
   maxPerPayment?: string;
 }
+
+/** @deprecated Usa SekishoAgentOptions. Se mantiene por compatibilidad. */
+export type SekishoFetchOptions = SekishoAgentOptions;
 
 export interface SekishoFetch {
   /** fetch que paga automáticamente cuando recibe un 402. */
@@ -20,16 +23,16 @@ export interface SekishoFetch {
 }
 
 /**
- * Crea un fetch con pagos x402 para agentes.
- * Autoriza el USDC de la red de Sekisho y aplica un tope por pago.
+ * Cliente de pagos x402 para agentes: autoriza el USDC de la red
+ * de Sekisho y aplica un tope por pago.
  */
-export function createSekishoFetch(options: SekishoFetchOptions): SekishoFetch {
+export function createSekishoPaymentClient(options: SekishoAgentOptions): x402Client {
   const network = options.network ?? "avalancheFuji";
   const config = NETWORKS[network];
   const caip2 = `eip155:${config.chain.id}` as const;
   const maxAtomic = parseUnits(options.maxPerPayment ?? "1", 6).toString();
 
-  const client = x402Client.fromConfig({
+  return x402Client.fromConfig({
     schemes: [{ network: caip2, client: new ExactEvmScheme(options.account) }],
     spendControls: {
       allowedAssets: [
@@ -37,7 +40,11 @@ export function createSekishoFetch(options: SekishoFetchOptions): SekishoFetch {
       ],
     },
   });
+}
 
+/** fetch con pagos x402 automáticos. */
+export function createSekishoFetch(options: SekishoAgentOptions): SekishoFetch {
+  const client = createSekishoPaymentClient(options);
   return {
     fetch: wrapFetchWithPayment(fetch, client) as typeof fetch,
     httpClient: new x402HTTPClient(client),
