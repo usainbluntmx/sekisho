@@ -55,3 +55,6 @@ Thumbs.db
 # =============================
 .vscode/
 .idea/
+# Kanjo
+apps/kanjo/data/
+apps/kanjo/public/

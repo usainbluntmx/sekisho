@@ -1,0 +1,37 @@
+{
+  "name": "kanjo",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "npm run build:web && node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/index.ts",
+    "chat": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/dev-chat.ts",
+    "seed": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/seed.ts",
+    "db:check": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/check-db.ts",
+    "typecheck": "tsc --noEmit",
+    "pay:check": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/check-payment.ts",
+    "build:web": "esbuild src/web/checkout-client.ts --bundle --minify --format=esm --platform=browser --target=es2022 --outfile=public/checkout.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
+    "@hono/node-server": "^2.1.5",
+    "@x402/core": "^2.28.0",
+    "@x402/evm": "^2.28.0",
+    "@x402/fetch": "^2.28.0",
+    "@x402/hono": "^2.28.0",
+    "@zero-two-labs/sekisho": "^0.1.1",
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
