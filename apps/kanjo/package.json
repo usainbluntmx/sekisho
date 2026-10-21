@@ -11,7 +11,9 @@
     "db:check": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/check-db.ts",
     "typecheck": "tsc --noEmit",
     "pay:check": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/check-payment.ts",
-    "build:web": "esbuild src/web/checkout-client.ts --bundle --minify --format=esm --platform=browser --target=es2022 --outfile=public/checkout.js"
+    "build:web": "esbuild src/web/checkout-client.ts --bundle --minify --format=esm --platform=browser --target=es2022 --outfile=public/checkout.js",
+    "build": "tsc && npm run build:web",
+    "start": "node --disable-warning=ExperimentalWarning dist/scripts/seed.js && node --disable-warning=ExperimentalWarning dist/index.js"
   },
   "keywords": [],
   "author": "",
