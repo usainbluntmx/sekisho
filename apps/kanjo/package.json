@@ -21,8 +21,8 @@
     "distribute": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/distribute.ts"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Zero Two Labs",
+  "license": "MIT",
   "type": "module",
   "private": true,
   "dependencies": {

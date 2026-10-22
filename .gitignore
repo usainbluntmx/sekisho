@@ -2,20 +2,16 @@
 # Dependencies
 # =============================
 node_modules/
-.pnp
-.pnp.js
 
 # =============================
-# Environment variables
+# Environment variables (los .env.example SÍ se versionan)
 # =============================
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
 
 # =============================
-# Hardhat
+# Contracts (Hardhat)
 # =============================
 backend/cache/
 backend/artifacts/
@@ -25,17 +21,16 @@ backend/coverage.json
 backend/deployments/localhost/
 
 # =============================
-# Next.js
+# Kanjō
 # =============================
-frontend/.next/
-frontend/out/
-frontend/build/
+apps/kanjo/data/
+apps/kanjo/public/
 
 # =============================
-# TypeScript
+# Builds
 # =============================
-*.tsbuildinfo
 dist/
+*.tsbuildinfo
 
 # =============================
 # Logs
@@ -45,16 +40,9 @@ logs/
 npm-debug.log*
 
 # =============================
-# OS
+# OS / IDE
 # =============================
 .DS_Store
 Thumbs.db
-
-# =============================
-# IDE
-# =============================
 .vscode/
 .idea/
-# Kanjo
-apps/kanjo/data/
-apps/kanjo/public/

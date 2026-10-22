@@ -14,8 +14,8 @@
     "deploy:avalanche": "hardhat deploy --network avalanche"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Zero Two Labs",
+  "license": "MIT",
   "type": "commonjs",
   "devDependencies": {
     "@nomicfoundation/hardhat-network-helpers": "^1.1.2",
