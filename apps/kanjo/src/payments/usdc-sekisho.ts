@@ -17,7 +17,7 @@ export const operator = privateKeyToAccount(operatorKey);
 
 export const sekisho = createSekishoClient({ network: "avalancheFuji", account: operator });
 
-/** Facilitator propio (se usa en el checkout del Paso 5). */
+/** Facilitator propio (se usa en el checkout). */
 export const facilitator = createSekishoFacilitator({ account: operator, network: "avalancheFuji" });
 
 export interface UsdcQuoteDetails {
@@ -59,6 +59,12 @@ export const usdcSekisho: PaymentMethod = {
   },
 
   async afterPaid(_order: Order, store: Store): Promise<void> {
+    // Por lotes (por defecto): el distributor reparte cuando conviene
+    if ((process.env.DISTRIBUTE_MODE ?? "batch") !== "each") {
+      console.log("[payments] Reparto programado (por lotes)");
+      return;
+    }
+
     const hash = await sekisho.distribute(store.merchant_address as Address);
     console.log(`[payments] Reparto ejecutado: ${sekisho.config.explorer}/tx/${hash}`);
   },

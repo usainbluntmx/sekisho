@@ -6,6 +6,7 @@ import { isValidSignature, parseIncomingMessages, sendText } from "./whatsapp.js
 import { handleMessage } from "./bot.js";
 import { registerCheckout } from "./checkout.js";
 import { claimMessage, enqueue, pruneProcessedMessages } from "./inbox.js";
+import { startDistributionScheduler } from "./distributor.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
@@ -101,5 +102,7 @@ if (DEV_CHAT_TOKEN) {
 pruneProcessedMessages();
 setInterval(() => pruneProcessedMessages(), 24 * 60 * 60 * 1000).unref();
 
+// Reparto por lotes de los vaults
+startDistributionScheduler();
 serve({ fetch: app.fetch, port: PORT });
 console.log(`[kanjo] Servidor en http://localhost:${PORT}`);
