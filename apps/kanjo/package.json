@@ -14,7 +14,8 @@
     "build:web": "esbuild src/web/checkout-client.ts --bundle --minify --format=esm --platform=browser --target=es2022 --outfile=public/checkout.js",
     "build": "tsc && npm run build:web",
     "start": "node --disable-warning=ExperimentalWarning dist/scripts/seed.js && node --disable-warning=ExperimentalWarning dist/index.js",
-    "test:safety": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-payment-safety.ts"
+    "test:safety": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-payment-safety.ts",
+    "test:webhook": "node --env-file=.env --import tsx src/scripts/check-webhook.ts"
   },
   "keywords": [],
   "author": "",

@@ -60,8 +60,13 @@ export function normalizeRecipient(waId: string): string {
   return waId;
 }
 
-/** Envía un mensaje de texto. */
+/** Envía un mensaje de texto. Sin credenciales de Meta, lo imprime en consola (modo prueba). */
 export async function sendText(to: string, body: string): Promise<void> {
+  if (!TOKEN || !PHONE_NUMBER_ID) {
+    console.log(`\n[whatsapp:dry-run → ${to}]\n${body}\n`);
+    return;
+  }
+
   const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${PHONE_NUMBER_ID}/messages`;
   const res = await fetch(url, {
     method: "POST",
