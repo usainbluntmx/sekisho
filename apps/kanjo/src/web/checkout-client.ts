@@ -61,8 +61,17 @@ button.addEventListener("click", async () => {
 
     const payFetch = wrapFetchWithPayment(fetch, client);
 
-    setStatus("Firma el pago en tu wallet…");
+    setStatus("Preparando el pago…");
     const response = await payFetch(`/api/pay?order=${encodeURIComponent(orderId)}`);
+
+    // El servidor rechazó el cobro antes de liquidar (ya pagado, sin stock, pago en proceso)
+    if (response.status === 404 || response.status === 409) {
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      setStatus(`⚠️ ${body.error ?? "Este pedido ya no se puede pagar."}`);
+      button.disabled = false;
+      return;
+    }
+
     const result = await new x402HTTPClient(client).processResponse(response);
 
     if (response.ok && result.paymentStatus === "settled") {
@@ -73,7 +82,10 @@ button.addEventListener("click", async () => {
       );
       button.remove();
     } else {
-      setStatus(`No se pudo completar el pago (código ${response.status}). Intenta de nuevo.`);
+      setStatus(
+        `No se pudo confirmar el pago (código ${response.status}). ` +
+          `Si ves un cargo en tu wallet, escríbenos por WhatsApp con el pedido ${orderId}.`
+      );
       button.disabled = false;
     }
   } catch (error) {

@@ -22,8 +22,8 @@ for (const i of items) console.log(`  ${i.quantity} × ${i.name}`);
 console.log(`  Total: ${formatUsdc(order.total_atomic)} USDC`);
 
 // Simula el pago
-console.log("\n¿Marcado como pagado?:", markOrderPaid(order.id, "0xTEST"));
-console.log("¿Segundo intento (debe ser false)?:", markOrderPaid(order.id, "0xTEST"));
+console.log("\n¿Marcado como pagado?:", markOrderPaid(order.id, "0xTEST").updated);
+console.log("¿Segundo intento (debe ser false)?:", markOrderPaid(order.id, "0xTEST").updated);
 console.log("Estado final:", getOrder(order.id)?.order.status);
 
 const after = listProducts(STORE_ID);

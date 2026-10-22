@@ -52,4 +52,26 @@ db.exec(`
     unit_price_atomic INTEGER NOT NULL,
     quantity          INTEGER NOT NULL CHECK (quantity > 0)
   );
+
+  -- Registro de cada liquidación on-chain (una fila por transacción)
+  CREATE TABLE IF NOT EXISTS payments (
+    tx            TEXT PRIMARY KEY,
+    order_id      TEXT NOT NULL REFERENCES orders(id),
+    payer         TEXT,
+    amount_atomic INTEGER NOT NULL,
+    kind          TEXT NOT NULL CHECK (kind IN ('order', 'duplicate')),
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
+
+// ─────────────── Migraciones ligeras ───────────────
+
+function hasColumn(table: string, column: string): boolean {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as unknown as { name: string }[];
+  return columns.some((c) => c.name === column);
+}
+
+// Faltantes de stock detectados al pagar (JSON), o NULL si no hubo
+if (!hasColumn("orders", "stock_issue")) {
+  db.exec("ALTER TABLE orders ADD COLUMN stock_issue TEXT");
+}

@@ -26,6 +26,8 @@ export interface Order {
   payment_tx: string | null;
   created_at: string;
   paid_at: string | null;
+  /** JSON con los faltantes de stock detectados al pagar, o null. */
+  stock_issue: string | null;
 }
 
 export interface OrderItem {
@@ -39,6 +41,26 @@ export interface OrderItem {
 export interface OrderItemInput {
   productId: number;
   quantity: number;
+}
+
+export interface StockShortage {
+  name: string;
+  requested: number;
+  available: number;
+}
+
+export interface MarkPaidResult {
+  /** false si el pedido no existía o ya no estaba pendiente. */
+  updated: boolean;
+  shortages: StockShortage[];
+}
+
+export interface PaymentRecord {
+  tx: string;
+  orderId: string;
+  payer?: string;
+  amountAtomic: number;
+  kind: "order" | "duplicate";
 }
 
 // ─────────────── Tienda y catálogo ───────────────
@@ -98,6 +120,7 @@ export function createOrder(
   try {
     let total = 0;
     const lines: OrderItem[] = [];
+    const requestedByProduct = new Map<number, number>();
 
     for (const input of inputs) {
       if (!Number.isInteger(input.quantity) || input.quantity <= 0) {
@@ -105,9 +128,13 @@ export function createOrder(
       }
       const product = getProduct(storeId, input.productId);
       if (!product) throw new Error(`El producto ${input.productId} no existe`);
-      if (product.stock < input.quantity) {
+
+      // Suma por producto (por si el mismo producto viene en varias líneas)
+      const requested = (requestedByProduct.get(product.id) ?? 0) + input.quantity;
+      if (product.stock < requested) {
         throw new Error(`No hay suficiente stock de ${product.name}`);
       }
+      requestedByProduct.set(product.id, requested);
 
       total += product.price_atomic * input.quantity;
       lines.push({
@@ -141,11 +168,27 @@ export function createOrder(
   return getOrder(orderId)!;
 }
 
+/** Productos del pedido que hoy no tienen stock suficiente. */
+export function getStockShortages(orderId: string): StockShortage[] {
+  return db
+    .prepare(
+      `SELECT p.name AS name, SUM(oi.quantity) AS requested, p.stock AS available
+       FROM order_items oi
+       JOIN products p ON p.id = oi.product_id
+       WHERE oi.order_id = ?
+       GROUP BY p.id
+       HAVING p.stock < SUM(oi.quantity)`
+    )
+    .all(orderId) as unknown as StockShortage[];
+}
+
 /**
  * Marca un pedido como pagado y descuenta stock.
- * Devuelve false si el pedido no existía o ya no estaba pendiente.
+ * Se llama DESPUÉS de que el pago ya se liquidó on-chain, así que nunca debe
+ * fallar por stock: si falta, el stock baja hasta 0 y el pedido queda marcado
+ * con `stock_issue` para que la tienda lo resuelva (cambio o reembolso).
  */
-export function markOrderPaid(orderId: string, paymentTx: string): boolean {
+export function markOrderPaid(orderId: string, paymentTx: string): MarkPaidResult {
   db.exec("BEGIN");
   try {
     const result = db
@@ -157,20 +200,44 @@ export function markOrderPaid(orderId: string, paymentTx: string): boolean {
 
     if (Number(result.changes) === 0) {
       db.exec("ROLLBACK");
-      return false;
+      return { updated: false, shortages: [] };
     }
 
-    const items = db
-      .prepare("SELECT product_id, quantity FROM order_items WHERE order_id = ?")
-      .all(orderId) as unknown as Pick<OrderItem, "product_id" | "quantity">[];
+    const shortages = getStockShortages(orderId);
 
-    const decrement = db.prepare("UPDATE products SET stock = stock - ? WHERE id = ?");
+    const items = db
+      .prepare(
+        "SELECT product_id, SUM(quantity) AS quantity FROM order_items WHERE order_id = ? GROUP BY product_id"
+      )
+      .all(orderId) as unknown as { product_id: number; quantity: number }[];
+
+    const decrement = db.prepare("UPDATE products SET stock = MAX(stock - ?, 0) WHERE id = ?");
     for (const item of items) decrement.run(item.quantity, item.product_id);
 
+    if (shortages.length > 0) {
+      db.prepare("UPDATE orders SET stock_issue = ? WHERE id = ?").run(
+        JSON.stringify(shortages),
+        orderId
+      );
+    }
+
     db.exec("COMMIT");
-    return true;
+    return { updated: true, shortages };
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
   }
+}
+
+// ─────────────── Pagos ───────────────
+
+/** Registra una liquidación. Idempotente: la misma tx no se registra dos veces. */
+export function recordPayment(payment: PaymentRecord): boolean {
+  const result = db
+    .prepare(
+      `INSERT OR IGNORE INTO payments (tx, order_id, payer, amount_atomic, kind)
+       VALUES (?, ?, ?, ?, ?)`
+    )
+    .run(payment.tx, payment.orderId, payment.payer ?? null, payment.amountAtomic, payment.kind);
+  return Number(result.changes) > 0;
 }
