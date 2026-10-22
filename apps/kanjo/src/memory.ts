@@ -11,19 +11,23 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_conversation_wa_id ON conversation_messages (wa_id, id);
 `);
 
+/** Ventana de memoria de la conversación: un cliente que vuelve mañana empieza limpio. */
+const HISTORY_HOURS = Number(process.env.HISTORY_HOURS ?? 12);
+
 export interface HistoryMessage {
   role: "user" | "assistant";
   content: string;
 }
 
-/** Últimos mensajes del cliente, en orden cronológico y empezando por 'user'. */
+/** Últimos mensajes recientes del cliente, en orden cronológico y empezando por 'user'. */
 export function getHistory(waId: string, limit = 20): HistoryMessage[] {
   const rows = db
     .prepare(
       `SELECT role, content FROM conversation_messages
-       WHERE wa_id = ? ORDER BY id DESC LIMIT ?`
+       WHERE wa_id = ? AND created_at >= datetime('now', ?)
+       ORDER BY id DESC LIMIT ?`
     )
-    .all(waId, limit) as unknown as HistoryMessage[];
+    .all(waId, `-${HISTORY_HOURS} hours`, limit) as unknown as HistoryMessage[];
 
   const history = rows.reverse();
   while (history.length > 0 && history[0].role !== "user") history.shift();
