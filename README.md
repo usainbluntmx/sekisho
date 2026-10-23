@@ -5,7 +5,7 @@
 - **Sekisho** (関所, *checkpoint*): on-chain payment layer + SDK. Any API or MCP tool can charge USDC via [x402](https://x402.org); every payment lands in the seller's **SplitVault**, which splits the platform fee and the seller's share.
 - **Kanjō** (勘定, *the bill*): an AI sales agent for small businesses. It chats with customers, builds orders and collects payment through Sekisho.
 
-> **Status:** testnet (Avalanche Fuji). Contracts are **not audited**. Do not use with real funds.
+> **Status:** running on Avalanche Fuji testnet. Do not use with real funds.
 > Website: https://sekisho.zerotwolabs.xyz · SDK: [`@zero-two-labs/sekisho`](https://www.npmjs.com/package/@zero-two-labs/sekisho)
 
 ## Repository
