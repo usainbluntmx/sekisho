@@ -6,7 +6,7 @@
 - **Kanjō** (勘定, *the bill*): an AI sales agent for small businesses. It chats with customers, builds orders and collects payment through Sekisho.
 
 > **Status:** testnet (Avalanche Fuji). Contracts are **not audited**. Do not use with real funds.
-> Live demo: https://kanjo.zerotwolabs.xyz · SDK: [`@zero-two-labs/sekisho`](https://www.npmjs.com/package/@zero-two-labs/sekisho)
+> Website: https://sekisho.zerotwolabs.xyz · SDK: [`@zero-two-labs/sekisho`](https://www.npmjs.com/package/@zero-two-labs/sekisho)
 
 ## Repository
 
@@ -15,6 +15,7 @@
 | Contracts | [`backend/`](backend) | `SplitVault` + `SplitVaultFactory` (Solidity, Hardhat, 17 tests) |
 | SDK | [`sdk/`](sdk) | x402 helpers for sellers, paying agents, self-facilitation and paid MCP tools |
 | App | [`apps/kanjo/`](apps/kanjo) | AI sales agent (Claude) + x402 checkout, deployed with Docker |
+| Website | [`apps/web/`](apps/web) | Landing page (Astro) at sekisho.zerotwolabs.xyz |
 
 ## How a payment flows
 

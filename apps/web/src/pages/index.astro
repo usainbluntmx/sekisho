@@ -1,0 +1,415 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const NPM = "https://www.npmjs.com/package/@zero-two-labs/sekisho";
+const GITHUB = "https://github.com/usainbluntmx/sekisho";
+const DOCS = `${GITHUB}/tree/main/sdk`;
+const KANJO = `${GITHUB}/tree/main/apps/kanjo`;
+const SNOWTRACE = "https://testnet.snowtrace.io/address";
+
+// Resaltado mínimo para los ejemplos (palabra clave, texto, comentario)
+const k = (t: string) => `<span class="tk-k">${t}</span>`;
+const s = (t: string) => `<span class="tk-s">${t}</span>`;
+const c = (t: string) => `<span class="tk-c">${t}</span>`;
+
+const examples = [
+  {
+    id: "seller",
+    label: "Sell an API",
+    file: "server.ts",
+    code: `${k("import")} { createSekishoClient, createPaymentOption } ${k("from")} ${s('"@zero-two-labs/sekisho"')};
+
+${k("const")} sekisho = createSekishoClient({ network: ${s('"avalancheFuji"')} });
+${k("const")} option = ${k("await")} createPaymentOption(sekisho, {
+  merchant: ${s('"0xYourWallet"')},
+  price: ${s('"0.01"')}, ${c("// USDC per request")}
+});
+
+app.use(paymentMiddleware({ ${s('"GET /premium"')}: { accepts: [option] } }, server));`,
+  },
+  {
+    id: "agent",
+    label: "Pay as an agent",
+    file: "agent.ts",
+    code: `${k("import")} { createSekishoFetch } ${k("from")} ${s('"@zero-two-labs/sekisho"')};
+
+${k("const")} { fetch: pay } = createSekishoFetch({
+  account,
+  maxPerPayment: ${s('"0.05"')}, ${c("// never signs above this")}
+});
+
+${k("const")} res = ${k("await")} pay(${s('"https://api.example.com/premium"')});
+${c("// 402 → signs within its limit → 200")}`,
+  },
+  {
+    id: "mcp",
+    label: "Paid MCP tools",
+    file: "mcp-server.ts",
+    code: `${k("import")} { createSekishoMcpPaywall } ${k("from")} ${s('"@zero-two-labs/sekisho"')};
+
+${k("const")} paid = ${k("await")} createSekishoMcpPaywall({
+  sekisho, facilitator,
+  merchant: ${s('"0xYourWallet"')},
+  price: ${s('"0.01"')}, ${c("// per tool call")}
+});
+
+server.tool(${s('"premium_insight"')}, ${s('"Costs 0.01 USDC"')}, schema, paid(handler));`,
+  },
+];
+
+const deployments = [
+  { label: "Network", value: "Avalanche Fuji · eip155:43113" },
+  {
+    label: "SplitVaultFactory",
+    value: "0xA1967201adD1Ac57d1c72D04Ca4d9159B98C8C5D",
+    href: `${SNOWTRACE}/0xA1967201adD1Ac57d1c72D04Ca4d9159B98C8C5D`,
+  },
+  {
+    label: "SplitVault (implementation)",
+    value: "0xA41b2f9A5dD725ECe6873c586b04c8Ef21921834",
+    href: `${SNOWTRACE}/0xA41b2f9A5dD725ECe6873c586b04c8Ef21921834`,
+  },
+  { label: "USDC (Circle)", value: "0x5425890298aed601595a70AB815c96711a31Bc65" },
+  { label: "Platform fee", value: "1.5% · hard cap 10%" },
+];
+---
+<Layout
+  title="Sekisho — x402 payments on Avalanche"
+  description="Charge any API or MCP tool in USDC. Every payment lands in the seller's on-chain vault and splits itself: platform fee and seller share, enforced by contract."
+>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <nav class="container nav__inner" aria-label="Main">
+      <a class="brand" href="#top">
+        <span class="seal" aria-hidden="true">関</span>
+        <span>Sekisho</span>
+      </a>
+      <div class="nav__links">
+        <a class="nav__secondary" href="#how">How it works</a>
+        <a class="nav__secondary" href="#developers">Developers</a>
+        <a class="nav__secondary" href="#trust">Security</a>
+        <a class="nav__secondary" href="#economics">Economics</a>
+        <a href={GITHUB}>GitHub</a>
+        <a class="btn btn--dark" href={NPM}>Get the SDK</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
+    <!-- Hero -->
+    <section id="top" class="section">
+      <div class="container hero__inner">
+        <div class="hero__copy">
+          <p class="eyebrow">x402 · Avalanche · USDC</p>
+          <h1 class="hero__title">The checkpoint for<br />agent payments.</h1>
+          <p class="hero__sub">
+            Charge any API or MCP tool in USDC. Every payment lands in the seller’s on-chain vault, which splits it
+            on its own: platform fee and seller share, enforced by contract.
+          </p>
+          <div class="hero__actions">
+            <a class="btn btn--accent" href="#developers">Start building</a>
+            <code class="install">npm i @zero-two-labs/sekisho</code>
+          </div>
+          <p class="status"><span class="status__dot" aria-hidden="true"></span>Live on Avalanche Fuji testnet</p>
+        </div>
+        <div class="hero__art" aria-hidden="true">
+          <div class="gate">
+            <div class="gate__kanji">関所</div>
+            <div class="stamp">済</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cómo funciona -->
+    <section id="how" class="section">
+      <div class="container section__inner">
+        <div class="section-head">
+          <span class="kanji-label" aria-hidden="true">仕組み</span>
+          <div class="section-head__text">
+            <p class="eyebrow">01 — How it works</p>
+            <h2 class="h2">One request. One signature.<br />Settled and split.</h2>
+          </div>
+        </div>
+        <ol class="hairline-grid">
+          <li class="cell">
+            <span class="step-label">STEP 01</span>
+            <h3>Request</h3>
+            <p>An agent or app calls your endpoint. Sekisho answers with the price, the token and the seller’s vault as the payment destination.</p>
+            <code>HTTP 402 · Payment Required</code>
+          </li>
+          <li class="cell">
+            <span class="step-label">STEP 02</span>
+            <h3>Sign</h3>
+            <p>The payer signs a USDC transfer authorization. No gas for the payer, and agents never sign above their own spend limit.</p>
+            <code>EIP-3009 · gasless</code>
+          </li>
+          <li class="cell">
+            <span class="step-label">STEP 03</span>
+            <h3>Settle &amp; split</h3>
+            <p>The payment settles on Avalanche into the seller’s SplitVault, which pays the platform fee and the seller in one call.</p>
+            <code>distribute() · permissionless</code>
+          </li>
+        </ol>
+        <div class="split" role="img" aria-label="Every payment splits 98.5 percent to the seller and 1.5 percent platform fee">
+          <div class="split__bar">
+            <div class="split__seller"></div>
+            <div class="split__fee"></div>
+          </div>
+          <div class="split__labels">
+            <span>Seller · 98.5%</span>
+            <span>Platform fee · 1.5% (hard cap 10%)</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Desarrolladores -->
+    <section id="developers" class="section section--dark">
+      <div class="container section__inner">
+        <div class="section-head">
+          <span class="kanji-label" aria-hidden="true">開発</span>
+          <div class="section-head__text">
+            <p class="eyebrow">02 — Developers</p>
+            <h2 class="h2">A few lines to get paid.</h2>
+            <p class="lead">Sell an endpoint, pay as an agent, or charge per MCP tool call. Same SDK, same vault, same split.</p>
+          </div>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Code examples">
+          {examples.map((ex, i) => (
+            <button
+              class="tab"
+              type="button"
+              role="tab"
+              id={`tab-${ex.id}`}
+              aria-controls={`panel-${ex.id}`}
+              aria-selected={i === 0 ? "true" : "false"}
+              tabindex={i === 0 ? 0 : -1}
+              data-tab={ex.id}
+              data-file={ex.file}
+            >
+              {ex.label}
+            </button>
+          ))}
+        </div>
+
+        <div class="code-window">
+          <div class="code-window__bar">
+            <span data-file-label>{examples[0].file}</span>
+            <span>TypeScript</span>
+          </div>
+          {examples.map((ex, i) => (
+            <div role="tabpanel" id={`panel-${ex.id}`} aria-labelledby={`tab-${ex.id}`} data-panel={ex.id} hidden={i !== 0}>
+              <pre><code set:html={ex.code}></code></pre>
+            </div>
+          ))}
+        </div>
+
+        <div class="links">
+          <a href={DOCS}>Read the SDK docs →</a>
+          <a href={NPM}>View on npm →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Seguridad -->
+    <section id="trust" class="section">
+      <div class="container section__inner">
+        <div class="section-head">
+          <span class="kanji-label" aria-hidden="true">信頼</span>
+          <div class="section-head__text">
+            <p class="eyebrow">03 — Security model</p>
+            <h2 class="h2">Trust the contract,<br />not the operator.</h2>
+          </div>
+        </div>
+        <div class="hairline-grid hairline-grid--wide">
+          <div class="cell cell--row">
+            <span class="numeral" aria-hidden="true">一</span>
+            <div>
+              <h3>Fee hard-capped at 10%</h3>
+              <p>The cap is enforced in the contract. Not even the owner can exceed it. Today the fee is 1.5%.</p>
+            </div>
+          </div>
+          <div class="cell cell--row">
+            <span class="numeral" aria-hidden="true">二</span>
+            <div>
+              <h3>Fixed destinations</h3>
+              <p>Anyone can trigger a split. Funds can only ever go to the treasury and the seller.</p>
+            </div>
+          </div>
+          <div class="cell cell--row">
+            <span class="numeral" aria-hidden="true">三</span>
+            <div>
+              <h3>Separated keys</h3>
+              <p>Owner and treasury are cold wallets. The server’s operator settles payments with no permissions on the contracts.</p>
+            </div>
+          </div>
+          <div class="cell cell--row">
+            <span class="numeral" aria-hidden="true">四</span>
+            <div>
+              <h3>Open and tested</h3>
+              <p>Verified contracts, MIT-licensed code and tests on every push for the contracts, the SDK and the reference app.</p>
+            </div>
+          </div>
+        </div>
+        <p class="note">Currently running on Avalanche Fuji testnet.</p>
+      </div>
+    </section>
+
+    <!-- Economía -->
+    <section id="economics" class="section">
+      <div class="container section__inner">
+        <div class="section-head">
+          <span class="kanji-label" aria-hidden="true">経済</span>
+          <div class="section-head__text">
+            <p class="eyebrow">04 — Economics</p>
+            <h2 class="h2">Measured, not estimated.</h2>
+            <p class="lead">Gas on Avalanche mainnet, measured in October 2026 at 2.5 nAVAX with AVAX near $9.5.</p>
+          </div>
+        </div>
+        <div class="econ">
+          <div class="table-box">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Operation</th>
+                  <th scope="col" class="num">Gas</th>
+                  <th scope="col" class="num">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Settlement <span class="fn">transferWithAuthorization</span></td>
+                  <td class="num">~102.8k</td>
+                  <td class="num">~$0.0025</td>
+                </tr>
+                <tr>
+                  <td>Split <span class="fn">distribute</span></td>
+                  <td class="num">~92.9k</td>
+                  <td class="num">~$0.0023</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat__value">$0.30</span>
+              <span class="stat__label">Minimum viable ticket, splitting every order</span>
+            </div>
+            <div class="stat">
+              <span class="stat__value stat__value--accent">$0.17</span>
+              <span class="stat__label">Minimum viable ticket, splitting in batches</span>
+            </div>
+          </div>
+        </div>
+        <p class="note">
+          That is why splits run in batches. Sub-cent MCP micropayments need batched settlement too: it is on the
+          roadmap through x402’s batch-settlement scheme.
+        </p>
+      </div>
+    </section>
+
+    <!-- Despliegues -->
+    <section id="contracts" class="section">
+      <div class="container section__inner">
+        <div class="section-head">
+          <span class="kanji-label" aria-hidden="true">契約</span>
+          <div class="section-head__text">
+            <p class="eyebrow">05 — Deployments</p>
+            <h2 class="h2">On-chain and verifiable.</h2>
+          </div>
+        </div>
+        <dl class="deploys">
+          {deployments.map((d) => (
+            <div class="deploys__row">
+              <dt>{d.label}</dt>
+              <dd>{d.href ? <a href={d.href}>{d.value}</a> : d.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+
+    <!-- Kanjō -->
+    <section id="kanjo" class="section">
+      <div class="container showcase">
+        <div class="showcase__copy">
+          <p class="eyebrow">Built on Sekisho</p>
+          <h2 class="showcase__title">Kanjō <span class="jp">勘定</span> — an AI sales agent for small businesses.</h2>
+          <p class="lead">
+            Customers chat, the agent builds the order and sends a payment link. The payment settles through Sekisho
+            and the split happens on its own.
+          </p>
+          <div class="links"><a href={KANJO}>See the reference app →</a></div>
+        </div>
+        <div class="receipt-wrap">
+          <div class="receipt">
+            <div class="receipt__meta"><span>Café Kanjō</span><span>Order 71AB6720</span></div>
+            <div class="receipt__line"><span>1 × Café americano</span><span class="mono">0.02 USDC</span></div>
+            <div class="receipt__total"><span>Total</span><span class="mono">0.02 USDC</span></div>
+            <div class="receipt__foot">Settled on Avalanche Fuji</div>
+            <div class="stamp stamp--sm" aria-hidden="true">済</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Llamada final -->
+    <section class="cta">
+      <div class="container cta__inner">
+        <div class="cta__copy">
+          <h2>Open the gate.</h2>
+          <p>Start charging for your API or MCP tools in USDC today, on Avalanche.</p>
+        </div>
+        <div class="cta__actions">
+          <a class="btn btn--light" href={NPM}>Get the SDK</a>
+          <a class="btn btn--ghost" href={GITHUB}>View on GitHub</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__brand">
+        <span class="seal seal--sm" aria-hidden="true">関</span>
+        <span>Sekisho 関所 · by <a href="https://zerotwolabs.xyz">Zero Two Labs</a></span>
+      </div>
+      <div class="footer__meta">
+        <span>MIT License</span>
+        <span>Avalanche Fuji testnet</span>
+        <a href={GITHUB}>GitHub</a>
+      </div>
+    </div>
+  </footer>
+</Layout>
+
+<script>
+  // Pestañas accesibles: clic y flechas ← → del teclado
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-tab]"));
+  const panels = Array.from(document.querySelectorAll<HTMLElement>("[data-panel]"));
+  const fileLabel = document.querySelector<HTMLElement>("[data-file-label]");
+
+  function select(tab: HTMLButtonElement) {
+    for (const t of tabs) {
+      const active = t === tab;
+      t.setAttribute("aria-selected", String(active));
+      t.tabIndex = active ? 0 : -1;
+    }
+    for (const p of panels) p.hidden = p.dataset.panel !== tab.dataset.tab;
+    if (fileLabel) fileLabel.textContent = tab.dataset.file ?? "";
+  }
+
+  tabs.forEach((tab, i) => {
+    tab.addEventListener("click", () => select(tab));
+    tab.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      const step = event.key === "ArrowRight" ? 1 : tabs.length - 1;
+      const next = tabs[(i + step) % tabs.length];
+      select(next);
+      next.focus();
+    });
+  });
+</script>
