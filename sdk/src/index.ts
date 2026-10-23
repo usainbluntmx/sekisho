@@ -34,3 +34,4 @@ export {
   type SekishoMcpClientOptions,
 } from "./mcp.js";
 export { splitVaultAbi, splitVaultFactoryAbi, erc20Abi } from "./abi.js";
+export { SDK_VERSION } from "./version.js";

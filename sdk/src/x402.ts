@@ -1,7 +1,11 @@
 import { parseUnits, type Address } from "viem";
 import type { SekishoClient } from "./client.js";
 
-/** Facilitator x402 v2 con soporte para Avalanche Fuji y C-Chain. */
+/**
+ * Facilitator x402 v2 externo con soporte para Avalanche.
+ * @deprecated Su RPC de Fuji falló de forma persistente en pruebas. Usa
+ * `createSekishoFacilitator` (self-facilitation). Se eliminará en 0.2.0.
+ */
 export const DEFAULT_FACILITATOR_URL = "https://facilitator.ultravioletadao.xyz";
 
 export interface PaymentOptionParams {

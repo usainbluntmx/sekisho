@@ -11,6 +11,7 @@ import type { SekishoClient } from "./client.js";
 import { createPaymentOption } from "./x402.js";
 import { createSekishoPaymentClient, type SekishoAgentOptions } from "./agent.js";
 import { toFacilitatorClient } from "./facilitator.js";
+import { SDK_VERSION } from "./version.js";
 
 // ─────────────────────────── Servidor ───────────────────────────
 
@@ -70,7 +71,7 @@ export type SekishoMcpClient = ReturnType<typeof wrapMCPClientWithPayment>;
 
 /** Cliente MCP para agentes que paga tools automáticamente. */
 export function createSekishoMcpClient(options: SekishoMcpClientOptions): SekishoMcpClient {
-  const mcpClient = new Client({ name: options.name ?? "sekisho-agent", version: "0.1.0" });
+  const mcpClient = new Client({ name: options.name ?? "sekisho-agent", version: SDK_VERSION });
   return wrapMCPClientWithPayment(mcpClient, createSekishoPaymentClient(options), {
     autoPayment: true,
   });

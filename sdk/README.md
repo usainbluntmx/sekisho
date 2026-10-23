@@ -4,7 +4,7 @@
 
 Sekisho turns any API or MCP tool into a paid endpoint that AI agents can pay for with USDC, using the [x402](https://x402.org) protocol. Every payment lands in the seller's on-chain **SplitVault**, which distributes the platform fee and the seller's share automatically.
 
-> Status: `v0.1.0` — Avalanche Fuji testnet.
+> Status: `v0.1.2` — Avalanche Fuji testnet.
 
 ## Install
 
