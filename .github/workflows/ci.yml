@@ -56,3 +56,4 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:safety
       - run: npm run test:distribution
+      - run: npm run test:security

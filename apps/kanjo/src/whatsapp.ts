@@ -83,6 +83,6 @@ export async function sendText(to: string, body: string): Promise<void> {
   });
 
   if (!res.ok) {
-    console.error("[whatsapp] Error al enviar:", res.status, await res.text());
+    throw new Error(`WhatsApp respondió ${res.status}: ${await res.text()}`);
   }
 }

@@ -75,3 +75,8 @@ function hasColumn(table: string, column: string): boolean {
 if (!hasColumn("orders", "stock_issue")) {
   db.exec("ALTER TABLE orders ADD COLUMN stock_issue TEXT");
 }
+
+// Token secreto del link de pago (128 bits)
+if (!hasColumn("orders", "pay_token")) {
+  db.exec("ALTER TABLE orders ADD COLUMN pay_token TEXT");
+}

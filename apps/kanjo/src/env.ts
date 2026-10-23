@@ -25,6 +25,9 @@ required("OPERATOR_PRIVATE_KEY", (v) => /^0x[0-9a-fA-F]{64}$/.test(v), "0x + 64 
 required("ANTHROPIC_API_KEY");
 required("MERCHANT_ADDRESS", (v) => /^0x[0-9a-fA-F]{40}$/.test(v), "dirección 0x de 40 caracteres hexadecimales");
 required("PUBLIC_BASE_URL", (v) => /^https?:\/\/\S+$/.test(v), "URL que empiece con http:// o https://");
+if (env.AVALANCHE_FUJI_RPC_URL && !/^https?:\/\/\S+$/.test(env.AVALANCHE_FUJI_RPC_URL)) {
+  problems.push("AVALANCHE_FUJI_RPC_URL: formato inválido (URL que empiece con http:// o https://)");
+}
 
 const channel = env.NOTIFY_CHANNEL ?? "console";
 if (!["console", "whatsapp"].includes(channel)) {

@@ -1,5 +1,4 @@
 import "./env.js";
-import { timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -8,17 +7,13 @@ import { handleMessage } from "./bot.js";
 import { registerCheckout } from "./checkout.js";
 import { claimMessage, enqueue, pruneProcessedMessages } from "./inbox.js";
 import { startDistributionScheduler } from "./distributor.js";
+import { startOutboxWorker } from "./outbox.js";
+import { recoverPaidNotifications } from "./notify.js";
+import { rateLimit, safeEqual } from "./security.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
 const DEV_CHAT_TOKEN = process.env.DEV_CHAT_TOKEN ?? "";
-
-/** Comparación en tiempo constante (no filtra el token por diferencias de tiempo). */
-function safeEqual(a: string, b: string): boolean {
-  const x = Buffer.from(a);
-  const y = Buffer.from(b);
-  return x.length === y.length && timingSafeEqual(x, y);
-}
 
 const app = new Hono();
 
@@ -26,6 +21,11 @@ app.get("/", (c) => c.json({ service: "Kanjō", status: "ok" }));
 
 // Archivos estáticos (bundle del checkout)
 app.use("/public/*", serveStatic({ root: "./" }));
+
+// Límites por IP (se registran antes que las rutas que protegen)
+app.use("/pay/*", rateLimit({ max: 60, windowMs: 60_000 }));
+app.use("/api/pay", rateLimit({ max: 30, windowMs: 60_000 }));
+app.use("/dev/chat", rateLimit({ max: 20, windowMs: 60_000 }));
 
 // Checkout web + cobro x402
 registerCheckout(app);
@@ -103,7 +103,13 @@ if (DEV_CHAT_TOKEN) {
 pruneProcessedMessages();
 setInterval(() => pruneProcessedMessages(), 24 * 60 * 60 * 1000).unref();
 
+// Avisos: recuperar los que no alcanzaron a encolarse y arrancar la bandeja de salida
+const recovered = recoverPaidNotifications();
+if (recovered > 0) console.log(`[outbox] ${recovered} aviso(s) recuperado(s) de pedidos pagados recientes`);
+startOutboxWorker();
+
 // Reparto por lotes de los vaults
 startDistributionScheduler();
+
 serve({ fetch: app.fetch, port: PORT });
 console.log(`[kanjo] Servidor en http://localhost:${PORT}`);

@@ -18,7 +18,8 @@
     "test:webhook": "node --env-file=.env --import tsx src/scripts/check-webhook.ts",
     "gas:report": "node --import tsx src/scripts/gas-report.ts",
     "test:distribution": "node --import tsx src/scripts/check-distribution-policy.ts",
-    "distribute": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/distribute.ts"
+    "distribute": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/distribute.ts",
+    "test:security": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-security.ts"
   },
   "keywords": [],
   "author": "Zero Two Labs",

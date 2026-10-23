@@ -14,6 +14,7 @@ const NETWORK = `eip155:${avalancheFuji.id}` as const;
 
 const root = document.getElementById("checkout")!;
 const orderId = root.dataset.orderId!;
+const payToken = root.dataset.payToken!;
 const amount = root.dataset.amount!;
 const asset = root.dataset.asset as Address;
 const explorer = root.dataset.explorer!;
@@ -62,10 +63,12 @@ button.addEventListener("click", async () => {
     const payFetch = wrapFetchWithPayment(fetch, client);
 
     setStatus("Preparando el pago…");
-    const response = await payFetch(`/api/pay?order=${encodeURIComponent(orderId)}`);
+    const response = await payFetch(
+      `/api/pay?order=${encodeURIComponent(orderId)}&t=${encodeURIComponent(payToken)}`
+    );
 
     // El servidor rechazó el cobro antes de liquidar (ya pagado, sin stock, pago en proceso)
-    if (response.status === 404 || response.status === 409) {
+    if ([404, 409, 429, 503].includes(response.status)) {
       const body = (await response.json().catch(() => ({}))) as { error?: string };
       setStatus(`⚠️ ${body.error ?? "Este pedido ya no se puede pagar."}`);
       button.disabled = false;

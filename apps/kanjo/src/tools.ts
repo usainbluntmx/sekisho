@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { createOrder, getOrder, listProducts } from "./store.js";
+import { createOrder, getOrder, listProducts, type Order } from "./store.js";
 import { formatUsdc } from "./money.js";
 
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ?? "http://localhost:3000";
@@ -12,6 +12,12 @@ export interface ToolContext {
 export interface ToolResult {
   content: string;
   isError?: boolean;
+}
+
+/** Link de pago con su token secreto. */
+function paymentUrl(order: Order): string | undefined {
+  if (!order.pay_token) return undefined;
+  return `${PUBLIC_BASE_URL}/pay/${order.id}?t=${order.pay_token}`;
 }
 
 export const TOOLS: Anthropic.Tool[] = [
@@ -97,7 +103,7 @@ export function executeTool(name: string, input: unknown, ctx: ToolContext): Too
               unit_price_usdc: formatUsdc(l.unit_price_atomic),
             })),
             total_usdc: formatUsdc(order.total_atomic),
-            payment_url: `${PUBLIC_BASE_URL}/pay/${order.id}`,
+            payment_url: paymentUrl(order),
           }),
         };
       }
@@ -115,10 +121,7 @@ export function executeTool(name: string, input: unknown, ctx: ToolContext): Too
             total_usdc: formatUsdc(found.order.total_atomic),
             items: found.items.map((l) => ({ name: l.name, quantity: l.quantity })),
             paid_at: found.order.paid_at,
-            payment_url:
-              found.order.status === "pending_payment"
-                ? `${PUBLIC_BASE_URL}/pay/${found.order.id}`
-                : undefined,
+            payment_url: found.order.status === "pending_payment" ? paymentUrl(found.order) : undefined,
           }),
         };
       }

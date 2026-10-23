@@ -28,6 +28,8 @@ export interface Order {
   paid_at: string | null;
   /** JSON con los faltantes de stock detectados al pagar, o null. */
   stock_issue: string | null;
+  /** Token secreto del link de pago. */
+  pay_token: string | null;
 }
 
 export interface OrderItem {
@@ -147,9 +149,9 @@ export function createOrder(
     }
 
     db.prepare(
-      `INSERT INTO orders (id, store_id, customer_wa_id, status, total_atomic)
-       VALUES (?, ?, ?, 'pending_payment', ?)`
-    ).run(orderId, storeId, customerWaId, total);
+      `INSERT INTO orders (id, store_id, customer_wa_id, status, total_atomic, pay_token)
+       VALUES (?, ?, ?, 'pending_payment', ?, ?)`
+    ).run(orderId, storeId, customerWaId, total, randomBytes(16).toString("base64url"));
 
     const insertItem = db.prepare(
       `INSERT INTO order_items (order_id, product_id, name, unit_price_atomic, quantity)

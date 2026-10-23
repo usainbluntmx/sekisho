@@ -15,6 +15,7 @@ function layout(title: string, body: string): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
   <title>${escapeHtml(title)}</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #f6f6f4; color: #1a1a1a; margin: 0; }
@@ -41,9 +42,10 @@ export interface CheckoutPageData {
   items: OrderItem[];
   usdc: string;
   explorer: string;
+  payToken: string;
 }
 
-export function renderCheckoutPage({ store, order, items, usdc, explorer }: CheckoutPageData): string {
+export function renderCheckoutPage({ store, order, items, usdc, explorer, payToken }: CheckoutPageData): string {
   const rows = items
     .map(
       (i) =>
@@ -66,6 +68,7 @@ export function renderCheckoutPage({ store, order, items, usdc, explorer }: Chec
     `Pagar pedido ${order.id}`,
     `<div class="card" id="checkout"
         data-order-id="${order.id}"
+        data-pay-token="${escapeHtml(payToken)}"
         data-amount="${order.total_atomic}"
         data-asset="${usdc}"
         data-explorer="${explorer}">
@@ -81,5 +84,8 @@ export function renderCheckoutPage({ store, order, items, usdc, explorer }: Chec
 }
 
 export function renderNotFound(): string {
-  return layout("Pedido no encontrado", `<div class="card"><h1>Pedido no encontrado</h1><p class="muted">Revisa el link que te enviamos por WhatsApp.</p></div>`);
+  return layout(
+    "Pedido no encontrado",
+    `<div class="card"><h1>Pedido no encontrado</h1><p class="muted">Revisa el link que te enviamos por WhatsApp.</p></div>`
+  );
 }
