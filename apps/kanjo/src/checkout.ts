@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
+import { decodePaymentRequiredHeader, decodePaymentSignatureHeader } from "@x402/core/http";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { toFacilitatorClient } from "@zero-two-labs/sekisho";
@@ -118,6 +119,28 @@ async function afterOrderPaid(orderId: string, tx: string): Promise<void> {
   }
 }
 
+/**
+ * Diagnóstico de cada intento firmado que termina en 402: motivo exacto que devuelve x402
+ * y, si no coinciden, lo que el servidor ofreció contra lo que el cliente firmó.
+ */
+function logPaymentAttempt(c: Context, orderId: string): void {
+  const signature = c.req.header("payment-signature");
+  console.log(`[checkout] /api/pay ${orderId} → ${c.res.status} (firma: ${signature ? "sí" : "no"})`);
+  if (!signature || c.res.status !== 402) return;
+
+  try {
+    const required = decodePaymentRequiredHeader(c.res.headers.get("payment-required") ?? "");
+    const payload = decodePaymentSignatureHeader(signature);
+    console.warn(
+      `[checkout] Pago firmado rechazado (pedido ${orderId}): ${required.error ?? "sin motivo"}\n` +
+        `  ofrecido: ${JSON.stringify(required.accepts)}\n` +
+        `  firmado:  ${JSON.stringify(payload.accepted)}`
+    );
+  } catch (error) {
+    console.warn(`[checkout] Pago firmado rechazado (pedido ${orderId}); no se pudo decodificar el detalle:`, error);
+  }
+}
+
 export function registerCheckout(app: Hono): void {
   const resourceServer = new x402ResourceServer(toFacilitatorClient(facilitator)).register(
     NETWORK,
@@ -134,6 +157,12 @@ export function registerCheckout(app: Hono): void {
         `${result.invalidReason ?? "sin motivo"} · payer ${result.payer ?? auth?.from ?? "?"}` +
         (result.invalidMessage ? ` · ${result.invalidMessage}` : "")
     );
+  });
+
+  // Diagnóstico: la verificación lanzó una excepción (RPC, firma ilegible, etc.)
+  resourceServer.onVerifyFailure(async ({ error }) => {
+    const ctx = paymentContext.getStore();
+    console.error(`[checkout] La verificación falló con excepción (pedido ${ctx?.orderId ?? "?"}):`, error);
   });
 
   // A) Justo antes de liquidar: revalidar el pedido y tomar el candado
@@ -248,6 +277,7 @@ export function registerCheckout(app: Hono): void {
     } finally {
       if (ctx.ownsSettlement) endSettlement(orderId);
     }
+    logPaymentAttempt(c, orderId);
   });
 
   // 3) Cobro x402 con precio y destinatario dinámicos por pedido

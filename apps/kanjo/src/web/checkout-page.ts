@@ -1,5 +1,16 @@
 import type { Order, OrderItem, Store } from "../store.js";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { formatUsdc } from "../money.js";
+
+/** Huella del bundle del checkout: cambia en cada build, así el navegador no usa una versión vieja. */
+const CHECKOUT_JS_VERSION = (() => {
+  try {
+    return createHash("sha256").update(readFileSync("public/checkout.js")).digest("hex").slice(0, 12);
+  } catch {
+    return String(Date.now());
+  }
+})();
 
 function escapeHtml(value: string): string {
   return value
@@ -72,7 +83,7 @@ export function renderCheckoutPage({ store, order, items, usdc, explorer, payTok
            <p class="muted" style="margin-top:12px">¿Usas Core? Copia el link y pégalo en su navegador (botón <b>Browser</b>).</p>
          </div>
          <div id="status" class="muted">Paga con tu wallet en Avalanche. Solo firmas, sin pagar gas.</div>
-         <script type="module" src="/public/checkout.js"></script>`;
+         <script type="module" src="/public/checkout.js?v=${CHECKOUT_JS_VERSION}"></script>`;
 
   return layout(
     `Pagar pedido ${order.id}`,
