@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4 — 2026-10-24
+
+- Fix: the self-facilitator now estimates settlement gas itself and caps it (estimate + 20%, max 1,000,000). An RPC returning an absurd `eth_estimateGas` value no longer makes settlement fail with "exceeds block gas limit".
+- New exports: `settlementGasLimit`, `SETTLEMENT_GAS_CAP`.
+
 ## 0.1.3 — 2026-10-23
 
 - RPC fallback: each network ships with several public RPCs (Avalanche official + publicnode). If one fails (403, 429, 5xx, timeout), requests move to the next one automatically.

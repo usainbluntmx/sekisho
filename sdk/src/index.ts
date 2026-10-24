@@ -22,6 +22,8 @@ export {
 } from "./agent.js";
 export {
   createSekishoFacilitator,
+  settlementGasLimit,
+  SETTLEMENT_GAS_CAP,
   toFacilitatorClient,
   type SekishoFacilitatorClient,
   type SekishoFacilitatorOptions,
