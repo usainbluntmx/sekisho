@@ -115,9 +115,14 @@ button.addEventListener("click", async () => {
     // 402 después de firmar: el servidor rechazó la firma ANTES de cobrar (no hubo cargo)
     if (response.status === 402) {
       let reason = "motivo desconocido";
+      const getHeader = (name: string) => response.headers.get(name);
       try {
-        const required = httpClient.getPaymentRequiredResponse((name) => response.headers.get(name));
-        reason = required.error ?? reason;
+        if (response.headers.has("payment-required")) {
+          reason = httpClient.getPaymentRequiredResponse(getHeader).error ?? reason;
+        } else if (response.headers.has("payment-response")) {
+          const settle = httpClient.getPaymentSettleResponse(getHeader);
+          reason = `liquidación: ${settle.errorReason ?? "sin motivo"}`;
+        }
       } catch {
         // Sin encabezado legible: se queda el motivo genérico
       }

@@ -1,6 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Context, Hono } from "hono";
-import { decodePaymentRequiredHeader, decodePaymentSignatureHeader } from "@x402/core/http";
+import {
+  decodePaymentRequiredHeader,
+  decodePaymentResponseHeader,
+  decodePaymentSignatureHeader,
+} from "@x402/core/http";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { toFacilitatorClient } from "@zero-two-labs/sekisho";
@@ -128,17 +132,41 @@ function logPaymentAttempt(c: Context, orderId: string): void {
   console.log(`[checkout] /api/pay ${orderId} → ${c.res.status} (firma: ${signature ? "sí" : "no"})`);
   if (!signature || c.res.status !== 402) return;
 
-  try {
-    const required = decodePaymentRequiredHeader(c.res.headers.get("payment-required") ?? "");
-    const payload = decodePaymentSignatureHeader(signature);
-    console.warn(
-      `[checkout] Pago firmado rechazado (pedido ${orderId}): ${required.error ?? "sin motivo"}\n` +
-        `  ofrecido: ${JSON.stringify(required.accepts)}\n` +
-        `  firmado:  ${JSON.stringify(payload.accepted)}`
-    );
-  } catch (error) {
-    console.warn(`[checkout] Pago firmado rechazado (pedido ${orderId}); no se pudo decodificar el detalle:`, error);
+  // Rechazo antes de cobrar (verificación): viene en PAYMENT-REQUIRED
+  const requiredHeader = c.res.headers.get("payment-required");
+  if (requiredHeader) {
+    try {
+      const required = decodePaymentRequiredHeader(requiredHeader);
+      const payload = decodePaymentSignatureHeader(signature);
+      console.warn(
+        `[checkout] Pago rechazado en la verificación (pedido ${orderId}): ${required.error ?? "sin motivo"}\n` +
+          `  ofrecido: ${JSON.stringify(required.accepts)}\n` +
+          `  firmado:  ${JSON.stringify(payload.accepted)}`
+      );
+    } catch (error) {
+      console.warn(`[checkout] No se pudo decodificar PAYMENT-REQUIRED (pedido ${orderId}):`, error);
+    }
+    return;
   }
+
+  // Falla al liquidar (la firma era válida, pero la transacción no se completó): viene en PAYMENT-RESPONSE
+  const responseHeader = c.res.headers.get("payment-response");
+  if (responseHeader) {
+    try {
+      const settle = decodePaymentResponseHeader(responseHeader);
+      console.error(
+        `[checkout] La liquidación falló (pedido ${orderId}): ${settle.errorReason ?? "sin motivo"}` +
+          (settle.errorMessage && settle.errorMessage !== settle.errorReason ? ` · ${settle.errorMessage}` : "") +
+          (settle.transaction ? ` · tx ${settle.transaction}` : "") +
+          ` · payer ${settle.payer ?? "?"}`
+      );
+    } catch (error) {
+      console.warn(`[checkout] No se pudo decodificar PAYMENT-RESPONSE (pedido ${orderId}):`, error);
+    }
+    return;
+  }
+
+  console.warn(`[checkout] 402 con firma y sin encabezados x402 (pedido ${orderId})`);
 }
 
 export function registerCheckout(app: Hono): void {
@@ -163,6 +191,12 @@ export function registerCheckout(app: Hono): void {
   resourceServer.onVerifyFailure(async ({ error }) => {
     const ctx = paymentContext.getStore();
     console.error(`[checkout] La verificación falló con excepción (pedido ${ctx?.orderId ?? "?"}):`, error);
+  });
+
+  // Diagnóstico: la liquidación lanzó una excepción (gas, RPC, revert…)
+   resourceServer.onSettleFailure(async ({ error }) => {
+     const ctx = paymentContext.getStore();
+     console.error(`[checkout] La liquidación lanzó una excepción (pedido ${ctx?.orderId ?? "?"}):`, error);
   });
 
   // A) Justo antes de liquidar: revalidar el pedido y tomar el candado
