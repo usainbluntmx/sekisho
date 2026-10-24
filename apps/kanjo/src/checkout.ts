@@ -124,6 +124,18 @@ export function registerCheckout(app: Hono): void {
     new ExactEvmScheme()
   );
 
+  // 0) Diagnóstico: si la verificación rechaza el pago, registrar el motivo exacto
+  resourceServer.onAfterVerify(async ({ result, paymentPayload }) => {
+    if (result.isValid) return;
+    const ctx = paymentContext.getStore();
+    const auth = (paymentPayload.payload as { authorization?: { from?: string } }).authorization;
+    console.warn(
+      `[checkout] Pago rechazado en la verificación (pedido ${ctx?.orderId ?? "?"}): ` +
+        `${result.invalidReason ?? "sin motivo"} · payer ${result.payer ?? auth?.from ?? "?"}` +
+        (result.invalidMessage ? ` · ${result.invalidMessage}` : "")
+    );
+  });
+
   // A) Justo antes de liquidar: revalidar el pedido y tomar el candado
   resourceServer.onBeforeSettle(async () => {
     const ctx = paymentContext.getStore();

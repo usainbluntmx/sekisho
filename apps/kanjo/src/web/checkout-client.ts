@@ -110,7 +110,26 @@ button.addEventListener("click", async () => {
       return;
     }
 
-    const result = await new x402HTTPClient(client).processResponse(response);
+    const httpClient = new x402HTTPClient(client);
+
+    // 402 después de firmar: el servidor rechazó la firma ANTES de cobrar (no hubo cargo)
+    if (response.status === 402) {
+      let reason = "motivo desconocido";
+      try {
+        const required = httpClient.getPaymentRequiredResponse((name) => response.headers.get(name));
+        reason = required.error ?? reason;
+      } catch {
+        // Sin encabezado legible: se queda el motivo genérico
+      }
+      setStatus(
+        `⚠️ El pago fue rechazado antes de cobrarse (no se hizo ningún cargo).<br/>` +
+          `Motivo: <code style="word-break:break-all">${reason.replaceAll("<", "&lt;")}</code>`
+      );
+      button.disabled = false;
+      return;
+    }
+
+    const result = await httpClient.processResponse(response);
 
     if (response.ok && result.paymentStatus === "settled") {
       const tx = (result.header as { transaction?: string } | undefined)?.transaction;
