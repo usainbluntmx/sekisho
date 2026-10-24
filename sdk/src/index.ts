@@ -6,6 +6,7 @@ export {
   type PendingSplit,
 } from "./client.js";
 export { NETWORKS, type NetworkConfig, type SekishoNetwork } from "./chains.js";
+export { createSekishoTransport } from "./transport.js";
 export {
   createPaymentOption,
   DEFAULT_FACILITATOR_URL,

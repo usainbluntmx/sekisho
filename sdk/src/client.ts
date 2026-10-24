@@ -1,7 +1,6 @@
 import {
     createPublicClient,
     createWalletClient,
-    http,
     zeroAddress,
     type Account,
     type Address,
@@ -10,10 +9,12 @@ import {
   } from "viem";
   import { splitVaultAbi, splitVaultFactoryAbi } from "./abi.js";
   import { NETWORKS, type NetworkConfig, type SekishoNetwork } from "./chains.js";
+  import { createSekishoTransport } from "./transport.js";
   
   export interface SekishoClientOptions {
     network?: SekishoNetwork;
-    rpcUrl?: string;
+    /** RPC propia (o lista). Las públicas de la red quedan como respaldo. */
+    rpcUrl?: string | readonly string[];
     /** Necesaria solo para escribir (createVault, distribute). */
     account?: Account;
   }
@@ -61,7 +62,7 @@ import {
     }
     const factory = config.factory;
   
-    const transport = http(options.rpcUrl ?? config.rpcUrl);
+    const transport = createSekishoTransport(config, options.rpcUrl);
     const publicClient = createPublicClient({ chain: config.chain, transport }) as PublicClient;
     const walletClient = options.account
       ? createWalletClient({ chain: config.chain, transport, account: options.account })

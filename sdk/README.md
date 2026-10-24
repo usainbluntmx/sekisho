@@ -86,6 +86,17 @@ const client = createSekishoMcpClient({ account, maxPerPayment: "0.05" });
 const result = await client.callTool("premium_insight", { topic: "Avalanche" });
 ```
 
+## RPC
+
+By default the SDK uses Avalanche's official public RPC with publicnode as automatic backup: if one endpoint fails (403, 429, 5xx or timeout), requests move to the next one. For production, pass your own RPC (or a list); the public endpoints stay as backup.
+
+```ts
+const sekisho = createSekishoClient({
+  network: "avalancheFuji",
+  rpcUrl: process.env.AVALANCHE_FUJI_RPC_URL, // optional: string or string[]
+});
+```
+
 ## Deployments
 
 | Network | SplitVaultFactory | USDC |

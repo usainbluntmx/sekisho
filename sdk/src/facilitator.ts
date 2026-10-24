@@ -2,14 +2,16 @@ import { x402Facilitator } from "@x402/core/facilitator";
 import { x402ResourceServer } from "@x402/core/server";
 import { toFacilitatorEvmSigner } from "@x402/evm";
 import { registerExactEvmScheme } from "@x402/evm/exact/facilitator";
-import { createWalletClient, http, publicActions, type LocalAccount } from "viem";
+import { createWalletClient, publicActions, type LocalAccount } from "viem";
 import { NETWORKS, type SekishoNetwork } from "./chains.js";
+import { createSekishoTransport } from "./transport.js";
 
 export interface SekishoFacilitatorOptions {
   /** Wallet que envía las transacciones de liquidación (paga el gas en AVAX). */
   account: LocalAccount;
   network?: SekishoNetwork;
-  rpcUrl?: string;
+  /** RPC propia (o lista). Las públicas de la red quedan como respaldo. */
+  rpcUrl?: string | readonly string[];
 }
 
 /** Tipo que acepta x402ResourceServer como facilitator. */
@@ -29,7 +31,7 @@ export function createSekishoFacilitator(options: SekishoFacilitatorOptions): x4
   const viemClient = createWalletClient({
     account: options.account,
     chain: config.chain,
-    transport: http(options.rpcUrl ?? config.rpcUrl),
+    transport: createSekishoTransport(config, options.rpcUrl),
   }).extend(publicActions);
 
   type VerifyTypedDataArgs = Parameters<typeof viemClient.verifyTypedData>[0];

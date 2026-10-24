@@ -13,7 +13,7 @@ import type { Order, Store } from "../store.js";
 const operatorKey = process.env.OPERATOR_PRIVATE_KEY as `0x${string}` | undefined;
 if (!operatorKey) throw new Error("Falta OPERATOR_PRIVATE_KEY en .env");
 
-/** RPC propia (recomendada en producción). Vacío = RPC pública oficial de Fuji. */
+/** RPC propia (recomendada en producción). Vacío = RPCs públicas de Fuji con respaldo automático. */
 const RPC_URL = process.env.AVALANCHE_FUJI_RPC_URL || undefined;
 
 /** Wallet operadora: liquida pagos x402 y ejecuta repartos (paga gas en AVAX). */

@@ -5,6 +5,9 @@ export type SekishoNetwork = "avalancheFuji" | "avalanche";
 
 export interface NetworkConfig {
   chain: Chain;
+  /** RPCs públicas en orden de preferencia; el SDK pasa a la siguiente si una falla. */
+  rpcUrls: readonly string[];
+  /** @deprecated Usa `rpcUrls`. Se elimina en 0.2.0. */
   rpcUrl: string;
   explorer: string;
   usdc: Address;
@@ -16,6 +19,10 @@ export interface NetworkConfig {
 export const NETWORKS: Record<SekishoNetwork, NetworkConfig> = {
   avalancheFuji: {
     chain: avalancheFuji,
+    rpcUrls: [
+      "https://api.avax-test.network/ext/bc/C/rpc",
+      "https://avalanche-fuji-c-chain-rpc.publicnode.com",
+    ],
     rpcUrl: "https://api.avax-test.network/ext/bc/C/rpc",
     explorer: "https://testnet.snowtrace.io",
     usdc: "0x5425890298aed601595a70AB815c96711a31Bc65",
@@ -24,6 +31,10 @@ export const NETWORKS: Record<SekishoNetwork, NetworkConfig> = {
   },
   avalanche: {
     chain: avalanche,
+    rpcUrls: [
+      "https://api.avax.network/ext/bc/C/rpc",
+      "https://avalanche-c-chain-rpc.publicnode.com",
+    ],
     rpcUrl: "https://api.avax.network/ext/bc/C/rpc",
     explorer: "https://snowtrace.io",
     usdc: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
