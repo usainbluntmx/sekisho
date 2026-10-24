@@ -15,6 +15,11 @@ const PORT = Number(process.env.PORT ?? 3000);
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
 const DEV_CHAT_TOKEN = process.env.DEV_CHAT_TOKEN ?? "";
 
+// Red de seguridad: una promesa rechazada sin manejar se registra en lugar de tumbar el proceso
+process.on("unhandledRejection", (reason) => {
+  console.error("[kanjo] Promesa rechazada sin manejar:", reason);
+});
+
 const app = new Hono();
 
 app.get("/", (c) => c.json({ service: "Kanjō", status: "ok" }));

@@ -148,8 +148,8 @@ const deployments = [
           <li class="cell">
             <span class="step-label">STEP 03</span>
             <h3>Settle &amp; split</h3>
-            <p>The payment settles on Avalanche into the seller’s SplitVault, which pays the platform fee and the seller in one call.</p>
-            <code>distribute() · permissionless</code>
+            <p>The payment settles on Avalanche into the seller’s SplitVault. Splits run in batches: one permissionless call pays the platform fee and the seller everything pending.</p>
+            <code>distribute() · batched · permissionless</code>
           </li>
         </ol>
         <div class="split" role="img" aria-label="Every payment splits 98.5 percent to the seller and 1.5 percent platform fee">

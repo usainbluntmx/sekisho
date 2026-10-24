@@ -91,6 +91,13 @@ function recordSafely(payment: PaymentRecord): void {
   }
 }
 
+/** Procesa la bandeja de salida en segundo plano; si falla, se registra y el worker reintenta. */
+function kickOutbox(): void {
+  processOutbox().catch((error) =>
+    console.error("[checkout] Error al procesar avisos (el worker reintenta):", error)
+  );
+}
+
 /** Tareas posteriores al pago: reparto (según el modo) y avisos por la bandeja de salida. */
 async function afterOrderPaid(orderId: string, tx: string): Promise<void> {
   const found = getOrder(orderId);
@@ -99,7 +106,7 @@ async function afterOrderPaid(orderId: string, tx: string): Promise<void> {
 
   try {
     enqueueOrderPaid(orderId);
-    void processOutbox();
+    kickOutbox();
   } catch (error) {
     console.error("[checkout] No se pudieron encolar los avisos (se recuperan al reiniciar):", error);
   }
@@ -165,7 +172,7 @@ export function registerCheckout(app: Hono): void {
       console.warn(`[checkout] Pago duplicado del pedido ${orderId} → ${EXPLORER}/tx/${tx}`);
       try {
         enqueueDuplicatePayment(orderId, tx, base.amountAtomic);
-        void processOutbox();
+        kickOutbox();
       } catch (error) {
         console.error("[checkout] No se pudo encolar el aviso de duplicado:", error);
       }
@@ -178,7 +185,9 @@ export function registerCheckout(app: Hono): void {
       console.warn(`[checkout] Pedido ${orderId} pagado SIN stock suficiente:`, result.shortages);
     }
 
-    void afterOrderPaid(orderId, tx);
+    afterOrderPaid(orderId, tx).catch((error) =>
+      console.error(`[checkout] Error en tareas posteriores al pago del pedido ${orderId}:`, error)
+    );
   });
 
   // 1) Página de pago (requiere el token del link)
