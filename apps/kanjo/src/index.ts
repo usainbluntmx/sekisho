@@ -2,10 +2,18 @@ import "./env.js";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { isValidSignature, parseIncomingMessages, sendText } from "./whatsapp.js";
+import { isValidSignature, parseIncomingMessages, sendText, type IncomingMessage } from "./whatsapp.js";
 import { handleMessage } from "./bot.js";
 import { registerCheckout } from "./checkout.js";
-import { claimMessage, enqueue, pruneProcessedMessages } from "./inbox.js";
+import {
+  enqueue,
+  markDone,
+  markFailed,
+  markStarted,
+  pruneInbox,
+  recoverPendingMessages,
+  saveIncoming,
+} from "./inbox.js";
 import { startDistributionScheduler } from "./distributor.js";
 import { startOutboxWorker } from "./outbox.js";
 import { recoverPaidNotifications } from "./notify.js";
@@ -48,6 +56,19 @@ app.get("/webhook", (c) => {
   return c.text("Forbidden", 403);
 });
 
+/** Procesa un mensaje del buzón en la cola de su cliente y registra el resultado. */
+function processIncoming(msg: IncomingMessage): void {
+  enqueue(msg.from, async () => {
+    markStarted(msg.id);
+    await handleMessage(msg, sendText);
+  })
+    .then(() => markDone(msg.id))
+    .catch((error) => {
+      console.error(`[webhook] Error procesando ${msg.id}:`, error);
+      markFailed(msg.id, error);
+    });
+}
+
 // Mensajes entrantes de WhatsApp: responder 200 de inmediato y procesar en segundo plano
 app.post("/webhook", async (c) => {
   const rawBody = await c.req.text();
@@ -65,15 +86,15 @@ app.post("/webhook", async (c) => {
   }
 
   for (const msg of messages) {
-    if (!claimMessage(msg.id)) {
+    // Se guarda en disco antes del 200: si el proceso muere, se recupera al arrancar.
+    // Si guardar falla, el handler responde 500 y Meta reintenta.
+    if (!saveIncoming(msg)) {
       console.log(`[webhook] Duplicado ignorado: ${msg.id}`);
       continue;
     }
 
     console.log(`[webhook] ${msg.name} (${msg.from}): ${msg.text ?? `[${msg.type}]`}`);
-    void enqueue(msg.from, () => handleMessage(msg, sendText)).catch((error) =>
-      console.error(`[webhook] Error procesando ${msg.id}:`, error)
-    );
+    processIncoming(msg);
   }
 
   return c.text("OK", 200);
@@ -104,9 +125,16 @@ if (DEV_CHAT_TOKEN) {
   console.log("[kanjo] /dev/chat habilitado");
 }
 
-// Limpieza diaria de ids de mensajes procesados
-pruneProcessedMessages();
-setInterval(() => pruneProcessedMessages(), 24 * 60 * 60 * 1000).unref();
+// Limpieza diaria del buzón (mensajes ya resueltos)
+pruneInbox();
+setInterval(() => pruneInbox(), 24 * 60 * 60 * 1000).unref();
+
+// Buzón: reprocesar los mensajes que quedaron pendientes si el proceso se detuvo
+const pendingMessages = recoverPendingMessages();
+if (pendingMessages.length > 0) {
+  console.log(`[webhook] ${pendingMessages.length} mensaje(s) pendiente(s) recuperado(s) del buzón`);
+}
+for (const msg of pendingMessages) processIncoming(msg);
 
 // Avisos: recuperar los que no alcanzaron a encolarse y arrancar la bandeja de salida
 const recovered = recoverPaidNotifications();

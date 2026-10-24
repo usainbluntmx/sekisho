@@ -57,6 +57,7 @@ jobs:
       - run: npm run test:safety
       - run: npm run test:distribution
       - run: npm run test:security
+      - run: npm run test:inbox
 
   web:
     name: Website

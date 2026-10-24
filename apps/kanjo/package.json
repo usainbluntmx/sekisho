@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "npm run test:safety && npm run test:distribution && npm run test:security",
+    "test": "npm run test:safety && npm run test:distribution && npm run test:security && npm run test:inbox",
     "dev": "npm run build:web && node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/index.ts",
     "chat": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/dev-chat.ts",
     "seed": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/seed.ts",
@@ -19,7 +19,8 @@
     "gas:report": "node --import tsx src/scripts/gas-report.ts",
     "test:distribution": "node --import tsx src/scripts/check-distribution-policy.ts",
     "distribute": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/distribute.ts",
-    "test:security": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-security.ts"
+    "test:security": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-security.ts",
+    "test:inbox": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-inbox.ts"
   },
   "keywords": [],
   "author": "Zero Two Labs",
