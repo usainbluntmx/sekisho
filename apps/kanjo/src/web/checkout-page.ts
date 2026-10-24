@@ -30,6 +30,10 @@ function layout(title: string, body: string): string {
     button:disabled { opacity: .6; cursor: default; }
     #status { margin-top: 16px; font-size: 14px; line-height: 1.5; word-break: break-word; }
     a { color: #e84142; }
+    .no-wallet { margin-top: 4px; font-size: 14px; line-height: 1.5; }
+    .no-wallet p { margin: 0 0 12px; }
+    .btn-link { display: block; box-sizing: border-box; width: 100%; padding: 14px; border-radius: 12px; background: #e84142; color: #fff; font-size: 16px; font-weight: 600; text-align: center; text-decoration: none; }
+    button.btn-outline { margin-top: 10px; background: #fff; color: #1a1a1a; border: 1px solid #ddd; }
   </style>
 </head>
 <body><main>${body}</main></body>
@@ -61,6 +65,12 @@ export function renderCheckoutPage({ store, order, items, usdc, explorer, payTok
     : order.status === "cancelled"
       ? `<p>Este pedido fue cancelado.</p>`
       : `<button id="pay-button">Pagar ${formatUsdc(order.total_atomic)} USDC</button>
+          <div id="no-wallet" class="no-wallet" hidden>
+           <p><b>Para pagar necesitas una wallet.</b> Abre este pedido en el navegador de tu wallet:</p>
+           <a id="open-metamask" class="btn-link" href="#">Abrir en MetaMask</a>
+           <button id="copy-link" type="button" class="btn-outline">Copiar link de pago</button>
+           <p class="muted" style="margin-top:12px">¿Usas Core? Copia el link y pégalo en su navegador (botón <b>Browser</b>).</p>
+         </div>
          <div id="status" class="muted">Paga con tu wallet en Avalanche. Solo firmas, sin pagar gas.</div>
          <script type="module" src="/public/checkout.js"></script>`;
 

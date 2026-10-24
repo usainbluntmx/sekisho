@@ -25,9 +25,44 @@ const setStatus = (html: string) => {
   statusEl.innerHTML = html;
 };
 
+// ───── Sin wallet (p. ej. el navegador de WhatsApp): abrir el pedido en el navegador de una wallet ─────
+const noWallet = document.getElementById("no-wallet");
+const openMetaMask = document.getElementById("open-metamask") as HTMLAnchorElement | null;
+const copyLink = document.getElementById("copy-link") as HTMLButtonElement | null;
+
+function showNoWallet(): void {
+  if (!noWallet || !openMetaMask) return;
+  // Deeplink oficial de MetaMask: abre la URL (sin protocolo) en su navegador interno
+  const target = window.location.href.replace(/^https?:\/\//, "");
+  openMetaMask.href = `https://link.metamask.io/dapp/${target}`;
+  noWallet.hidden = false;
+  button.hidden = true;
+  setStatus("");
+}
+
+copyLink?.addEventListener("click", async () => {
+  const link = window.location.href;
+  try {
+    await navigator.clipboard.writeText(link);
+    copyLink.textContent = "✓ Link copiado";
+  } catch {
+    // Sin permiso de portapapeles: mostrar el link para copiarlo a mano
+    setStatus(`Copia este link: <br/><code style="word-break:break-all">${link.replaceAll("<", "&lt;")}</code>`);
+  }
+});
+
+// Las wallets inyectan window.ethereum al cargar; se revisa poco después de la carga
+function checkWallet(): void {
+  setTimeout(() => {
+    if (!window.ethereum) showNoWallet();
+  }, 400);
+}
+if (document.readyState === "complete") checkWallet();
+else window.addEventListener("load", checkWallet);
+
 button.addEventListener("click", async () => {
   if (!window.ethereum) {
-    setStatus("Necesitas una wallet en tu navegador (Core o MetaMask) para pagar.");
+    showNoWallet();
     return;
   }
 
