@@ -1,39 +1,47 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {SplitVault} from "./SplitVault.sol";
 
-/// @title SplitVaultFactory
-/// @notice Crea un SplitVault (clon EIP-1167) por vendedor y define
-///         la tesorería y el fee de la plataforma.
+/// @title SplitVaultFactory (v2)
+/// @notice Crea un SplitVault (clon EIP-1167) por vendedor, define la tesorería y
+///         el fee de la plataforma, y lleva el registro vendedor => vault (con rotación).
 contract SplitVaultFactory is Ownable {
     /// @notice Tope de fee: 10%. No se puede superar ni siendo owner.
     uint16 public constant MAX_FEE_BPS = 1_000;
 
     address public immutable implementation;
+    /// @notice Token en el que se cobra (USDC). Se reparte al vendedor anterior al rotar.
+    address public immutable settlementToken;
     address public treasury;
     uint16 public feeBps;
 
-    /// @notice vendedor => su vault
+    /// @notice vendedor => su vault (se actualiza cuando el vendedor rota su dirección)
     mapping(address => address) public vaultOf;
 
     event VaultCreated(address indexed merchant, address indexed vault);
+    event MerchantRotated(address indexed vault, address indexed previousMerchant, address indexed newMerchant);
     event TreasuryUpdated(address indexed treasury);
     event FeeUpdated(uint16 feeBps);
 
     error ZeroAddress();
     error FeeTooHigh();
     error VaultExists();
+    error NotVault();
+    error MerchantRetired();
+    error CounterfactualFunds();
 
-    constructor(address initialOwner, address treasury_, uint16 feeBps_)
+    constructor(address initialOwner, address treasury_, uint16 feeBps_, address settlementToken_)
         Ownable(initialOwner)
     {
-        if (treasury_ == address(0)) revert ZeroAddress();
+        if (treasury_ == address(0) || settlementToken_ == address(0)) revert ZeroAddress();
         if (feeBps_ > MAX_FEE_BPS) revert FeeTooHigh();
 
         implementation = address(new SplitVault());
+        settlementToken = settlementToken_;
         treasury = treasury_;
         feeBps = feeBps_;
     }
@@ -43,6 +51,8 @@ contract SplitVaultFactory is Ownable {
     function createVault(address merchant) external returns (address vault) {
         if (merchant == address(0)) revert ZeroAddress();
         if (vaultOf[merchant] != address(0)) revert VaultExists();
+        // Su vault original ya existe y pertenece a otra dirección (rotó)
+        if (predictVault(merchant).code.length > 0) revert MerchantRetired();
 
         vault = Clones.cloneDeterministic(implementation, _salt(merchant));
         SplitVault(vault).initialize(address(this), merchant);
@@ -51,10 +61,39 @@ contract SplitVaultFactory is Ownable {
         emit VaultCreated(merchant, vault);
     }
 
-    /// @notice Dirección del vault de `merchant`, exista o no todavía.
-    ///         Sirve como payTo de x402 desde el primer momento.
-    function predictVault(address merchant) external view returns (address) {
+    /// @notice Dirección determinística del vault original de `merchant`.
+    function predictVault(address merchant) public view returns (address) {
         return Clones.predictDeterministicAddress(implementation, _salt(merchant));
+    }
+
+    /// @notice Dirección a la que se le debe cobrar a `merchant` (payTo de x402):
+    ///         su vault registrado, o el predicho si todavía no existe.
+    ///         Revierte si `merchant` rotó a otra dirección (cobrarle ahí pagaría a otro).
+    function resolvePayTo(address merchant) external view returns (address) {
+        address registered = vaultOf[merchant];
+        if (registered != address(0)) return registered;
+        address predicted = predictVault(merchant);
+        if (predicted.code.length > 0) revert MerchantRetired();
+        return predicted;
+    }
+
+    /// @notice Solo la llama un vault durante acceptMerchant(): mueve el registro
+    ///         de la dirección anterior a la nueva.
+    function onMerchantRotated(address previousMerchant, address newMerchant) external {
+        if (vaultOf[previousMerchant] != msg.sender) revert NotVault();
+        if (newMerchant == address(0)) revert ZeroAddress();
+        if (vaultOf[newMerchant] != address(0)) revert VaultExists();
+        // Pagos enviados al vault predicho (aún sin crear) de la nueva dirección quedarían
+        // atorados, porque esa dirección ya no podría crear su vault original.
+        address predicted = predictVault(newMerchant);
+        if (predicted.code.length == 0 && IERC20(settlementToken).balanceOf(predicted) > 0) {
+            revert CounterfactualFunds();
+        }
+
+        delete vaultOf[previousMerchant];
+        vaultOf[newMerchant] = msg.sender;
+
+        emit MerchantRotated(msg.sender, previousMerchant, newMerchant);
     }
 
     function setTreasury(address treasury_) external onlyOwner {
