@@ -21,6 +21,11 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: npx hardhat test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install slither-analyzer==0.11.6
+      - run: slither . --filter-paths "node_modules|contracts/mocks" --fail-low
 
   sdk:
     name: SDK

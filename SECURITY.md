@@ -13,6 +13,19 @@ Please open a private security advisory on GitHub (Security → Report a vulnera
 - Merchant rotation is two-step (propose by the current merchant, accept by the new address).
 - Owner and treasury are cold wallets set in the factory constructor; the server's operator key has no permissions on the contracts.
 
+## Static analysis
+
+[Slither](https://github.com/crytic/slither) 0.11.6 runs in CI on every push (`--fail-low`, all 102 detectors). Current result: **0 findings**. Eight results were triaged as false positives or intended design and are suppressed inline with `slither-disable-next-line` and a comment explaining why:
+
+| Detector | Where | Why it is safe |
+| --- | --- | --- |
+| `reentrancy-no-eth`, `reentrancy-events` | `SplitVaultFactory.createVault` | `initialize()` runs on the freshly created clone (our own implementation, no external calls). |
+| `reentrancy-events` | `SplitVault.acceptMerchant` | The external call goes to the factory that created the vault. |
+| `incorrect-equality` | `SplitVault.distribute` | `total == 0` only prevents an empty split; any forced balance is split with the same fixed destinations. |
+| `timestamp` (×4) | Fee delay in `SplitVaultFactory` | The delay is 7 days; validator timestamp drift of a few seconds is irrelevant. |
+
+Static analysis is not a substitute for a professional audit, which is recommended before significant mainnet volume.
+
 ## Known dependency advisories
 
 Production dependencies are audited in CI (`npm audit --omit=dev --audit-level=critical`) for `sdk/`, `apps/kanjo/` and `apps/web/`.

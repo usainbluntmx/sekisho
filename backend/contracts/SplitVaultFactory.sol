@@ -66,6 +66,9 @@ contract SplitVaultFactory is Ownable {
         if (predictVault(merchant).code.length > 0) revert MerchantRetired();
 
         vault = Clones.cloneDeterministic(implementation, _salt(merchant));
+        // El clon recién creado ejecuta código propio (la implementación), sin llamadas externas:
+        // no puede reentrar (falso positivo de Slither).
+        // slither-disable-next-line reentrancy-no-eth,reentrancy-events
         SplitVault(vault).initialize(address(this), merchant);
         vaultOf[merchant] = vault;
 
@@ -114,13 +117,17 @@ contract SplitVaultFactory is Ownable {
     }
 
     /// @notice Fee vigente en este momento (lo usa cada vault al repartir).
+    /// @dev El retraso es de 7 días: unos segundos de margen del validador en block.timestamp
+    ///      no importan (por eso se ignora el detector `timestamp` de Slither aquí y abajo).
     function feeBps() public view returns (uint16) {
+        // slither-disable-next-line timestamp
         if (_feeEffectiveAt != 0 && block.timestamp >= _feeEffectiveAt) return _pendingFeeBps;
         return _feeBps;
     }
 
     /// @notice Cambio de fee programado que todavía no aplica: (0, 0) si no hay ninguno.
     function pendingFeeChange() external view returns (uint16 newFeeBps, uint64 effectiveAt) {
+        // slither-disable-next-line timestamp
         if (_feeEffectiveAt != 0 && block.timestamp < _feeEffectiveAt) {
             return (_pendingFeeBps, _feeEffectiveAt);
         }
@@ -140,6 +147,7 @@ contract SplitVaultFactory is Ownable {
     /// @notice Cancela el cambio de fee programado (si todavía no entró en vigor).
     function cancelFeeChange() external onlyOwner {
         _settleFee();
+        // slither-disable-next-line timestamp
         if (_feeEffectiveAt == 0) revert NoFeeChange();
         uint16 cancelled = _pendingFeeBps;
         _pendingFeeBps = 0;
@@ -149,6 +157,7 @@ contract SplitVaultFactory is Ownable {
 
     /// @dev Si un cambio programado ya entró en vigor, lo consolida como fee vigente.
     function _settleFee() internal {
+        // slither-disable-next-line timestamp
         if (_feeEffectiveAt != 0 && block.timestamp >= _feeEffectiveAt) {
             _feeBps = _pendingFeeBps;
             _pendingFeeBps = 0;

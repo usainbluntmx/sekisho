@@ -73,6 +73,8 @@ contract SplitVault is Initializable {
         returns (uint256 fee, uint256 merchantAmount)
     {
         uint256 total = IERC20(token).balanceOf(address(this));
+        // Solo evita un reparto vacío: un saldo forzado > 0 se reparte igual (falso positivo de Slither)
+        // slither-disable-next-line incorrect-equality
         if (total == 0) revert NothingToDistribute();
         (fee, merchantAmount) = _distribute(token, total);
     }
@@ -101,7 +103,9 @@ contract SplitVault is Initializable {
         merchant = newMerchant;
         pendingMerchant = address(0);
 
-        // La factory actualiza su registro vendedor => vault (y valida la nueva dirección)
+        // La factory actualiza su registro vendedor => vault (y valida la nueva dirección).
+        // Es de confianza: es la misma que creó este vault (falso positivo de Slither).
+        // slither-disable-next-line reentrancy-events
         ISplitConfig(factory).onMerchantRotated(previousMerchant, newMerchant);
 
         emit MerchantChanged(previousMerchant, newMerchant);
