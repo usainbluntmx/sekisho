@@ -1,9 +1,10 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { loadFixture, time } from "@nomicfoundation/hardhat-network-helpers";
 
 const FEE_BPS = 150; // 1.5%
 const usdc = (amount: string) => ethers.parseUnits(amount, 6);
+const WEEK = 7 * 24 * 60 * 60;
 
 describe("Sekisho: SplitVaultFactory + SplitVault", function () {
   async function deployFixture() {
@@ -108,7 +109,7 @@ describe("Sekisho: SplitVaultFactory + SplitVault", function () {
     it("solo el owner puede cambiar fee y tesorería", async function () {
       const { other, factory } = await loadFixture(deployFixture);
 
-      await expect(factory.connect(other).setFeeBps(100))
+      await expect(factory.connect(other).scheduleFeeChange(100))
         .to.be.revertedWithCustomError(factory, "OwnableUnauthorizedAccount")
         .withArgs(other.address);
 
@@ -133,13 +134,11 @@ describe("Sekisho: SplitVaultFactory + SplitVault", function () {
     it("el owner no puede subir el fee por encima del 10%", async function () {
       const { factory } = await loadFixture(deployFixture);
 
-      await expect(factory.setFeeBps(1001)).to.be.revertedWithCustomError(
+      await expect(factory.scheduleFeeChange(1001)).to.be.revertedWithCustomError(
         factory,
         "FeeTooHigh"
       );
-      await expect(factory.setFeeBps(1000))
-        .to.emit(factory, "FeeUpdated")
-        .withArgs(1000);
+      await expect(factory.scheduleFeeChange(1000)).to.emit(factory, "FeeChangeScheduled");
     });
   });
 
@@ -206,11 +205,12 @@ describe("Sekisho: SplitVaultFactory + SplitVault", function () {
       expect(await token.balanceOf(merchant.address)).to.equal(1n);
     });
 
-    it("aplica el nuevo fee si el owner lo cambia", async function () {
+    it("aplica el nuevo fee una vez que entra en vigor", async function () {
       const { factory, treasury, merchant, payer, token, vault, vaultAddress } =
         await loadFixture(vaultFixture);
 
-      await factory.setFeeBps(0);
+      await factory.scheduleFeeChange(0);
+      await time.increase(WEEK);
       await token.connect(payer).transfer(vaultAddress, usdc("50"));
       await vault.distribute(await token.getAddress());
 
@@ -446,6 +446,112 @@ describe("Sekisho: SplitVaultFactory + SplitVault", function () {
       await expect(
         payer.sendTransaction({ to: vaultAddress, value: ethers.parseEther("1") })
       ).to.be.reverted;
+    });
+  });
+  // ───────────────────────── Cambio de fee con retraso (v3) ─────────────────────────
+
+  describe("Cambio de fee con retraso (v3)", function () {
+    it("el retraso es de 7 días y ya no existe setFeeBps", async function () {
+      const { factory } = await loadFixture(deployFixture);
+
+      expect(await factory.FEE_CHANGE_DELAY()).to.equal(BigInt(WEEK));
+      expect(factory.interface.getFunction("setFeeBps")).to.equal(null);
+    });
+
+    it("programar un cambio no altera el fee hasta que pasan 7 días", async function () {
+      const { factory } = await loadFixture(deployFixture);
+
+      const tx = await factory.scheduleFeeChange(500);
+      const effectiveAt = BigInt((await time.latest()) + WEEK);
+      await expect(tx).to.emit(factory, "FeeChangeScheduled").withArgs(500, effectiveAt);
+
+      expect(await factory.feeBps()).to.equal(FEE_BPS);
+      expect(await factory.pendingFeeChange()).to.deep.equal([500n, effectiveAt]);
+
+      await time.increaseTo(effectiveAt - 1n);
+      expect(await factory.feeBps()).to.equal(FEE_BPS);
+
+      await time.increaseTo(effectiveAt);
+      expect(await factory.feeBps()).to.equal(500);
+      expect(await factory.pendingFeeChange()).to.deep.equal([0n, 0n]);
+    });
+
+    it("lo cobrado y repartido antes de la fecha usa el fee anterior", async function () {
+      const { treasury, merchant, payer, token, factory, vault, vaultAddress } =
+        await loadFixture(vaultFixture);
+
+      await token.connect(payer).transfer(vaultAddress, usdc("100"));
+      await factory.scheduleFeeChange(1000); // subir al tope del 10%
+      await time.increase(WEEK - 60);
+      await vault.distribute(await token.getAddress()); // cualquiera puede repartir antes
+
+      expect(await token.balanceOf(treasury.address)).to.equal(usdc("1.5"));
+      expect(await token.balanceOf(merchant.address)).to.equal(usdc("98.5"));
+
+      await time.increase(60);
+      await token.connect(payer).transfer(vaultAddress, usdc("100"));
+      await vault.distribute(await token.getAddress());
+      expect(await token.balanceOf(treasury.address)).to.equal(usdc("11.5")); // 1.5 + 10
+    });
+
+    it("el owner puede cancelar un cambio programado", async function () {
+      const { factory } = await loadFixture(deployFixture);
+
+      await factory.scheduleFeeChange(800);
+      await expect(factory.cancelFeeChange()).to.emit(factory, "FeeChangeCancelled").withArgs(800);
+
+      await time.increase(WEEK);
+      expect(await factory.feeBps()).to.equal(FEE_BPS);
+      await expect(factory.cancelFeeChange()).to.be.revertedWithCustomError(factory, "NoFeeChange");
+    });
+
+    it("reprogramar reemplaza el cambio y reinicia el plazo", async function () {
+      const { factory } = await loadFixture(deployFixture);
+
+      await factory.scheduleFeeChange(800);
+      await time.increase(WEEK - 3600);
+      await factory.scheduleFeeChange(300);
+      const effectiveAt = BigInt((await time.latest()) + WEEK);
+
+      await time.increase(3600); // el primer plazo ya habría vencido
+      expect(await factory.feeBps()).to.equal(FEE_BPS);
+      expect(await factory.pendingFeeChange()).to.deep.equal([300n, effectiveAt]);
+
+      await time.increaseTo(effectiveAt);
+      expect(await factory.feeBps()).to.equal(300);
+    });
+
+    it("un cambio ya vigente se consolida al programar el siguiente", async function () {
+      const { factory } = await loadFixture(deployFixture);
+
+      await factory.scheduleFeeChange(300);
+      await time.increase(WEEK);
+      await expect(factory.scheduleFeeChange(200)).to.emit(factory, "FeeUpdated").withArgs(300);
+
+      expect(await factory.feeBps()).to.equal(300); // el nuevo (2%) aún no aplica
+      await time.increase(WEEK);
+      expect(await factory.feeBps()).to.equal(200);
+    });
+
+    it("las bajadas de fee también esperan 7 días", async function () {
+      const { factory } = await loadFixture(deployFixture);
+
+      await factory.scheduleFeeChange(0);
+      expect(await factory.feeBps()).to.equal(FEE_BPS);
+      await time.increase(WEEK);
+      expect(await factory.feeBps()).to.equal(0);
+    });
+
+    it("solo el owner puede programar o cancelar", async function () {
+      const { other, factory } = await loadFixture(deployFixture);
+
+      await expect(factory.connect(other).scheduleFeeChange(100))
+        .to.be.revertedWithCustomError(factory, "OwnableUnauthorizedAccount")
+        .withArgs(other.address);
+      await factory.scheduleFeeChange(100);
+      await expect(factory.connect(other).cancelFeeChange())
+        .to.be.revertedWithCustomError(factory, "OwnableUnauthorizedAccount")
+        .withArgs(other.address);
     });
   });
 });

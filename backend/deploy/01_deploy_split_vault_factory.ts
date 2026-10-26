@@ -47,7 +47,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const implementation = await factory.implementation();
 
   log("─────────────────────────────────────────────");
-  log(`SplitVaultFactory (v2):  ${result.address}`);
+  log(`SplitVaultFactory (v3):  ${result.address}`);
   log(`SplitVault (impl base):  ${implementation}`);
 
   if (network.name === "avalancheFuji") {
