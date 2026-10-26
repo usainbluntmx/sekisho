@@ -60,17 +60,17 @@ server.tool(${s('"premium_insight"')}, ${s('"Costs 0.01 USDC"')}, schema, paid(h
 const deployments = [
   { label: "Network", value: "Avalanche Fuji · eip155:43113" },
   {
-    label: "SplitVaultFactory (v2)",
-    value: "0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807",
-    href: `${SNOWTRACE}/0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807`,
+    label: "SplitVaultFactory (v3)",
+    value: "0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab",
+    href: `${SNOWTRACE}/0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab`,
   },
   {
     label: "SplitVault (implementation)",
-    value: "0x56a806b5FA565cF6c4720dcbfD32564B640986DD",
-    href: `${SNOWTRACE}/0x56a806b5FA565cF6c4720dcbfD32564B640986DD`,
+    value: "0xD504A30e90A5EEa3d5fd26B588c9854e31819a3C",
+    href: `${SNOWTRACE}/0xD504A30e90A5EEa3d5fd26B588c9854e31819a3C`,
   },
   { label: "USDC (Circle)", value: "0x5425890298aed601595a70AB815c96711a31Bc65" },
-  { label: "Platform fee", value: "1.5% · hard cap 10%" },
+  { label: "Platform fee", value: "1.5% · hard cap 10% · changes take 7 days" },
 ];
 ---
 <Layout
@@ -229,7 +229,7 @@ const deployments = [
             <span class="numeral" aria-hidden="true">一</span>
             <div>
               <h3>Fee hard-capped at 10%</h3>
-              <p>The cap is enforced in the contract. Not even the owner can exceed it. Today the fee is 1.5%.</p>
+              <p>The cap is enforced in the contract. Not even the owner can exceed it, and any fee change takes 7 days to apply. Today the fee is 1.5%.</p>
             </div>
           </div>
           <div class="cell cell--row">

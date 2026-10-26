@@ -12,7 +12,7 @@
 
 | Layer | Path | What it is |
 | --- | --- | --- |
-| Contracts | [`backend/`](backend) | `SplitVault` + `SplitVaultFactory` (Solidity, Hardhat, 32 tests) |
+| Contracts | [`backend/`](backend) | `SplitVault` + `SplitVaultFactory` (Solidity, Hardhat, 40 tests) |
 | SDK | [`sdk/`](sdk) | x402 helpers for sellers, paying agents, self-facilitation and paid MCP tools |
 | App | [`apps/kanjo/`](apps/kanjo) | AI sales agent (Claude) + x402 checkout, deployed with Docker |
 | Website | [`apps/web/`](apps/web) | Landing page (Astro) at sekisho.zerotwolabs.xyz |
@@ -36,17 +36,17 @@ Customer ──chat──▶ Kanjō agent (Claude) ──▶ order + payment lin
 
 | Contract / role | Address |
 | --- | --- |
-| `SplitVaultFactory` (v2) | [`0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807`](https://testnet.snowtrace.io/address/0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807) |
-| `SplitVault` (v2 implementation) | [`0x56a806b5FA565cF6c4720dcbfD32564B640986DD`](https://testnet.snowtrace.io/address/0x56a806b5FA565cF6c4720dcbfD32564B640986DD) |
+| `SplitVaultFactory` (v3) | [`0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab`](https://testnet.snowtrace.io/address/0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab) |
+| `SplitVault` (v3 implementation) | [`0xD504A30e90A5EEa3d5fd26B588c9854e31819a3C`](https://testnet.snowtrace.io/address/0xD504A30e90A5EEa3d5fd26B588c9854e31819a3C) |
 | Owner | `0xb7345347a7FCAa1D4A411e843D8939016737F3b3` |
 | Treasury | `0x06584d9FF65a2cB110022858A9540d903258298A` |
 | USDC (Circle) | `0x5425890298aed601595a70AB815c96711a31Bc65` |
 
-The v1 factory ([`0xA1967201adD1Ac57d1c72D04Ca4d9159B98C8C5D`](https://testnet.snowtrace.io/address/0xA1967201adD1Ac57d1c72D04Ca4d9159B98C8C5D)) is deprecated: no merchant rotation, used by SDK ≤ 0.1.5.
+Deprecated factories on Fuji: v2 [`0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807`](https://testnet.snowtrace.io/address/0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807) (no fee delay, SDK 0.2.x) and v1 [`0xA1967201adD1Ac57d1c72D04Ca4d9159B98C8C5D`](https://testnet.snowtrace.io/address/0xA1967201adD1Ac57d1c72D04Ca4d9159B98C8C5D) (no merchant rotation, SDK ≤ 0.1.5).
 
 ## Security model
 
-- **Fee hard cap:** `MAX_FEE_BPS = 1000` (10%) is enforced in the contract; not even the owner can exceed it. Current fee: 1.5%.
+- **Fee hard cap and 7-day delay:** `MAX_FEE_BPS = 1000` (10%) is enforced in the contract; not even the owner can exceed it. Every fee change is scheduled and applies 7 days later (`FEE_CHANGE_DELAY`), so collected funds can always be split with the fee in force when they were charged. Current fee: 1.5%.
 - **Permissionless, fixed-destination splits:** anyone can call `distribute()`, but funds can only go to the treasury and the merchant.
 - **No withdraw function:** everything that enters a vault can only leave through `distribute()`. Vaults reject native AVAX.
 - **Two-step merchant rotation:** only the current merchant can propose a new payout address and only that address can accept; anything pending is paid to the previous address first.

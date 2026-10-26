@@ -8,7 +8,7 @@ Please open a private security advisory on GitHub (Security → Report a vulnera
 
 ## Contract guarantees
 
-- Platform fee hard-capped at 10% (`MAX_FEE_BPS`), enforced in the contract.
+- Platform fee hard-capped at 10% (`MAX_FEE_BPS`), enforced in the contract. Every fee change applies 7 days after it is scheduled (`FEE_CHANGE_DELAY`); `distribute()` is permissionless, so pending funds can always be split with the current fee first.
 - Vaults have no withdraw function: funds only leave through `distribute()`, to the treasury and the merchant.
 - Merchant rotation is two-step (propose by the current merchant, accept by the new address).
 - Owner and treasury are cold wallets set in the factory constructor; the server's operator key has no permissions on the contracts.
