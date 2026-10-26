@@ -46,6 +46,20 @@ export async function runDistribution(force = false): Promise<DistributionResult
 
   try {
     const policy = policyFromEnv();
+
+    // Cambio de fee programado en la factory (aplica a todas las tiendas)
+    const { feeBps, feeChange } = await sekisho.getConfig();
+    const pendingFeeChange = feeChange
+      ? {
+          hoursLeft: (feeChange.effectiveAt.getTime() - Date.now()) / 3_600_000,
+          increase: feeChange.feeBps > feeBps,
+        }
+      : null;
+    if (pendingFeeChange?.increase) {
+      console.log(
+        `[distributor] Subida de fee programada: ${feeBps} → ${feeChange!.feeBps} bps el ${feeChange!.effectiveAt.toISOString()}`
+      );
+    }
     const stores = db.prepare("SELECT id, merchant_address FROM stores").all() as unknown as {
       id: string;
       merchant_address: string;
@@ -58,7 +72,11 @@ export async function runDistribution(force = false): Promise<DistributionResult
       try {
         const pending = await sekisho.pending(merchant);
         const decision = decide(
-          { pendingAtomic: pending.total, oldestUndistributedHours: oldestUndistributedHours(store.id) },
+          {
+            pendingAtomic: pending.total,
+            oldestUndistributedHours: oldestUndistributedHours(store.id),
+            feeChange: pendingFeeChange,
+          },
           policy,
           force
         );

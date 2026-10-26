@@ -47,6 +47,7 @@ if (!["batch", "each"].includes(mode)) {
 }
 positiveNumber("DISTRIBUTE_MIN_USDC");
 positiveNumber("DISTRIBUTE_MAX_HOURS");
+positiveNumber("DISTRIBUTE_FEE_CHANGE_HOURS");
 positiveNumber("DISTRIBUTE_CHECK_MINUTES");
 positiveNumber("HISTORY_HOURS");
 
