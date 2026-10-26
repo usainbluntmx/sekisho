@@ -7,6 +7,7 @@ export {
 } from "./client.js";
 export { NETWORKS, type NetworkConfig, type SekishoNetwork } from "./chains.js";
 export { createSekishoTransport } from "./transport.js";
+export { settlementGasLimit, SETTLEMENT_GAS_CAP } from "./gas.js";
 export {
   createPaymentOption,
   DEFAULT_FACILITATOR_URL,
@@ -22,8 +23,6 @@ export {
 } from "./agent.js";
 export {
   createSekishoFacilitator,
-  settlementGasLimit,
-  SETTLEMENT_GAS_CAP,
   toFacilitatorClient,
   type SekishoFacilitatorClient,
   type SekishoFacilitatorOptions,

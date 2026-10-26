@@ -16,6 +16,7 @@ import {
 } from "viem";
 import { NETWORKS, type SekishoNetwork } from "./chains.js";
 import { createSekishoTransport } from "./transport.js";
+import { settlementGasLimit } from "./gas.js";
 
 export interface SekishoFacilitatorOptions {
   /** Wallet que envía las transacciones de liquidación (paga el gas en AVAX). */
@@ -23,22 +24,6 @@ export interface SekishoFacilitatorOptions {
   network?: SekishoNetwork;
   /** RPC propia (o lista). Las públicas de la red quedan como respaldo. */
   rpcUrl?: string | readonly string[];
-}
-
-/**
- * Tope de gas por transacción de liquidación. transferWithAuthorization usa ~103k;
- * el tope deja margen para despliegues de wallets ERC-6492.
- */
-export const SETTLEMENT_GAS_CAP = 1_000_000n;
-
-/**
- * Límite de gas para liquidar: estimación + 20 %, nunca por encima del tope.
- * Protege contra RPCs que devuelven estimaciones absurdas (el nodo rechazaría la tx
- * con "exceeds block gas limit").
- */
-export function settlementGasLimit(estimated: bigint, cap: bigint = SETTLEMENT_GAS_CAP): bigint {
-  const padded = (estimated * 12n) / 10n;
-  return padded > cap ? cap : padded;
 }
 
 type SettlementClient = WalletClient<Transport, Chain, Account> & PublicActions<Transport, Chain, Account>;

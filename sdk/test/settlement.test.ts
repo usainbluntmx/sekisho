@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createWalletClient, http, parseAbi, parseTransaction, publicActions, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { avalancheFuji } from "viem/chains";
-import { SETTLEMENT_GAS_CAP, settlementGasLimit } from "../src/index.js";
+import { SETTLEMENT_GAS_CAP, createSekishoClient, settlementGasLimit } from "../src/index.js";
 import { writeContractWithGasCap } from "../src/facilitator.js";
 
 /** RPC local que responde lo mínimo para enviar una tx y guarda la tx cruda recibida. */
@@ -29,6 +29,25 @@ function mockRpc(estimate: Hex): Promise<{ url: string; sent: Hex[]; server: Ser
       sent.push(params[0] as Hex);
       return `0x${"ab".repeat(32)}`;
     },
+        // Lecturas del cliente (vaultOf / predictVault): siempre el mismo vault
+        eth_call: () => `0x${"00".repeat(12)}6827b96001ee85ef16fa7a85c4a7daf62cd4ac2f`,
+        eth_blockNumber: () => "0x2",
+        eth_getTransactionReceipt: () => ({
+          transactionHash: `0x${"ab".repeat(32)}`,
+          transactionIndex: "0x0",
+          blockHash: `0x${"11".repeat(32)}`,
+          blockNumber: "0x1",
+          from: `0x${"00".repeat(20)}`,
+          to: `0x${"00".repeat(20)}`,
+          cumulativeGasUsed: "0x16b48",
+          gasUsed: "0x16b48",
+          effectiveGasPrice: "0x64",
+          contractAddress: null,
+          logs: [],
+          logsBloom: `0x${"00".repeat(256)}`,
+          status: "0x1",
+          type: "0x2",
+        }),
   };
   const server = createServer((req, res) => {
     let body = "";
@@ -88,4 +107,19 @@ describe("settlement gas limit", () => {
   it("caps an absurd RPC estimate instead of failing with 'exceeds block gas limit'", async () => {
     expect(await sentGas("0xa8836e64f8042")).toBe(SETTLEMENT_GAS_CAP);
   });
+
+  it("SekishoClient.distribute also caps an absurd estimate", async () => {
+    const rpc = await mockRpc("0xa8836e64beb5e");
+    try {
+      const sekisho = createSekishoClient({
+        network: "avalancheFuji",
+        rpcUrl: rpc.url,
+        account: privateKeyToAccount(generatePrivateKey()),
+      });
+      await sekisho.distribute("0xAdc41EBCd5e6cBaC36B688a1c447262A17c56dae");
+      expect(parseTransaction(rpc.sent[0]).gas).toBe(SETTLEMENT_GAS_CAP);
+    } finally {
+      rpc.server.close();
+    }
+  }, 20_000);
 });

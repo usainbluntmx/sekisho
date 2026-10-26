@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5 — 2026-10-26
+
+- Fix: the gas cap now applies to every transaction the SDK sends, not only self-facilitated settlements. `SekishoClient.createVault` and `distribute` estimate gas and cap it (estimate + 20%, max 1,000,000), so an RPC returning an absurd `eth_estimateGas` no longer fails with "exceeds block gas limit".
+
 ## 0.1.4 — 2026-10-24
 
 - Fix: the self-facilitator now estimates settlement gas itself and caps it (estimate + 20%, max 1,000,000). An RPC returning an absurd `eth_estimateGas` value no longer makes settlement fail with "exceeds block gas limit".

@@ -10,6 +10,7 @@ import {
   import { splitVaultAbi, splitVaultFactoryAbi } from "./abi.js";
   import { NETWORKS, type NetworkConfig, type SekishoNetwork } from "./chains.js";
   import { createSekishoTransport } from "./transport.js";
+  import { settlementGasLimit } from "./gas.js";
   
   export interface SekishoClientOptions {
     network?: SekishoNetwork;
@@ -74,6 +75,19 @@ import {
       }
       return walletClient;
     }
+
+        /** Escribe en un contrato con gas estimado y acotado (una RPC con una estimación absurda no tumba la tx). */
+        async function write(request: {
+          address: Address;
+          abi: readonly unknown[];
+          functionName: string;
+          args: readonly unknown[];
+        }): Promise<Hash> {
+          const wallet = requireWallet();
+          const call = { ...request, account: wallet.account } as any;
+          const gas = settlementGasLimit(await publicClient.estimateContractGas(call));
+          return wallet.writeContract({ ...call, gas });
+        }
   
     async function getConfig(): Promise<SekishoConfig> {
       const [treasury, feeBps] = await Promise.all([
@@ -103,8 +117,7 @@ import {
     }
   
     async function createVault(merchant: Address): Promise<{ hash: Hash; vault: Address }> {
-      const wallet = requireWallet();
-      const hash = await wallet.writeContract({
+      const hash = await write({
         address: factory,
         abi: splitVaultFactoryAbi,
         functionName: "createVault",
@@ -129,12 +142,12 @@ import {
     }
   
     async function distribute(merchant: Address, token: Address = config.usdc): Promise<Hash> {
-      const wallet = requireWallet();
+      requireWallet();
       if (!(await isVaultDeployed(merchant))) {
         await createVault(merchant);
       }
       const vault = await getPayTo(merchant);
-      const hash = await wallet.writeContract({
+      const hash = await write({
         address: vault,
         abi: splitVaultAbi,
         functionName: "distribute",
