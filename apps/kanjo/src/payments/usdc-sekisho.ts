@@ -28,15 +28,19 @@ export const facilitator = createSekishoFacilitator({
   rpcUrl: RPC_URL,
 });
 
-/** El vault de cada vendedor es determinístico: se consulta una vez y se reutiliza. */
-const vaultCache = new Map<string, Address>();
+/**
+ * payTo cacheado 10 min: casi nunca cambia, pero con los contratos v2 puede cambiar
+ * si el vendedor rota su vault a otra dirección.
+ */
+const PAYTO_TTL_MS = 10 * 60_000;
+const vaultCache = new Map<string, { vault: Address; at: number }>();
 
 async function cachedPayTo(merchant: Address): Promise<Address> {
   const key = merchant.toLowerCase();
-  const cached = vaultCache.get(key);
-  if (cached) return cached;
+  const hit = vaultCache.get(key);
+  if (hit && Date.now() - hit.at < PAYTO_TTL_MS) return hit.vault;
   const vault = await sekisho.getPayTo(merchant);
-  vaultCache.set(key, vault);
+  vaultCache.set(key, { vault, at: Date.now() });
   return vault;
 }
 
