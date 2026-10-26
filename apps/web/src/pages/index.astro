@@ -60,14 +60,14 @@ server.tool(${s('"premium_insight"')}, ${s('"Costs 0.01 USDC"')}, schema, paid(h
 const deployments = [
   { label: "Network", value: "Avalanche Fuji · eip155:43113" },
   {
-    label: "SplitVaultFactory",
-    value: "0xA1967201adD1Ac57d1c72D04Ca4d9159B98C8C5D",
-    href: `${SNOWTRACE}/0xA1967201adD1Ac57d1c72D04Ca4d9159B98C8C5D`,
+    label: "SplitVaultFactory (v2)",
+    value: "0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807",
+    href: `${SNOWTRACE}/0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807`,
   },
   {
     label: "SplitVault (implementation)",
-    value: "0xA41b2f9A5dD725ECe6873c586b04c8Ef21921834",
-    href: `${SNOWTRACE}/0xA41b2f9A5dD725ECe6873c586b04c8Ef21921834`,
+    value: "0x56a806b5FA565cF6c4720dcbfD32564B640986DD",
+    href: `${SNOWTRACE}/0x56a806b5FA565cF6c4720dcbfD32564B640986DD`,
   },
   { label: "USDC (Circle)", value: "0x5425890298aed601595a70AB815c96711a31Bc65" },
   { label: "Platform fee", value: "1.5% · hard cap 10%" },
@@ -236,7 +236,7 @@ const deployments = [
             <span class="numeral" aria-hidden="true">二</span>
             <div>
               <h3>Fixed destinations</h3>
-              <p>Anyone can trigger a split. Funds can only ever go to the treasury and the seller.</p>
+              <p>Anyone can trigger a split and there is no withdraw function: funds only ever go to the treasury and the seller. Sellers can rotate their payout address in two steps.</p>
             </div>
           </div>
           <div class="cell cell--row">
