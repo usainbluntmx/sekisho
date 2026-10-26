@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 — 2026-10-26
+
+- Fix: `pending()` now reports payments sitting at a vault address that hasn't been deployed yet (it reads the USDC balance of the predicted address and applies the current fee). Before, it returned 0 until the vault existed, so batch distributors never triggered the first `distribute()`.
+
 ## 0.2.0 — 2026-10-26
 
 **Breaking: uses the SplitVaultFactory v2 on Avalanche Fuji (`0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807`).** Vault addresses change: a seller's v2 `payTo` is different from their v1 vault.

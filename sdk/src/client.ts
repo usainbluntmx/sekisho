@@ -9,7 +9,7 @@ import {
   type Hash,
   type PublicClient,
 } from "viem";
-import { splitVaultAbi, splitVaultFactoryAbi } from "./abi.js";
+import { erc20Abi, splitVaultAbi, splitVaultFactoryAbi } from "./abi.js";
 import { NETWORKS, type NetworkConfig, type SekishoNetwork } from "./chains.js";
 import { createSekishoTransport } from "./transport.js";
 import { settlementGasLimit } from "./gas.js";
@@ -160,7 +160,14 @@ export function createSekishoClient(options: SekishoClientOptions = {}): Sekisho
   async function pending(merchant: Address, token: Address = config.usdc): Promise<PendingSplit> {
     const vault = await getPayTo(merchant);
     if (!(await isVaultDeployed(merchant))) {
-      return { vault, deployed: false, total: 0n, fee: 0n, merchantAmount: 0n };
+      // El vault aún no existe, pero su dirección ya puede tener pagos: se calcula el reparto
+      // con el saldo y el fee actual (distribute() lo creará y repartirá)
+      const [total, feeBps] = await Promise.all([
+        publicClient.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [vault] }),
+        publicClient.readContract({ address: factory, abi: splitVaultFactoryAbi, functionName: "feeBps" }),
+      ]);
+      const fee = (total * BigInt(feeBps)) / 10_000n;
+      return { vault, deployed: false, total, fee, merchantAmount: total - fee };
     }
     const [total, fee, merchantAmount] = await publicClient.readContract({
       address: vault,

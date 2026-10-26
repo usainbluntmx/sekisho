@@ -153,4 +153,20 @@ describe("SekishoClient v2", () => {
       rpc.server.close();
     }
   }, 20_000);
+  it("pending() counts payments that arrived before the vault was created", async () => {
+    const rpc = await mockRpc((data) => {
+      if (data.startsWith(toFunctionSelector("vaultOf(address)"))) return { result: word("0x0000000000000000000000000000000000000000") as Hex };
+      if (data.startsWith(toFunctionSelector("resolvePayTo(address)"))) return { result: word(VAULT) as Hex };
+      if (data.startsWith(toFunctionSelector("balanceOf(address)"))) return { result: `0x${(20_000).toString(16).padStart(64, "0")}` as Hex };
+      if (data.startsWith(toFunctionSelector("feeBps()"))) return { result: `0x${(150).toString(16).padStart(64, "0")}` as Hex };
+      return { result: "0x" };
+    });
+    try {
+      const sekisho = createSekishoClient({ rpcUrl: rpc.url });
+      const p = await sekisho.pending(MERCHANT);
+      expect(p).toEqual({ vault: VAULT, deployed: false, total: 20_000n, fee: 300n, merchantAmount: 19_700n });
+    } finally {
+      rpc.server.close();
+    }
+  });
 });
