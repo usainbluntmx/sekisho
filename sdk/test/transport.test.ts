@@ -47,7 +47,6 @@ describe("createSekishoTransport", () => {
   it("lists every network with at least two public RPCs", () => {
     for (const config of Object.values(NETWORKS)) {
       expect(config.rpcUrls.length).toBeGreaterThanOrEqual(2);
-      expect(config.rpcUrl).toBe(config.rpcUrls[0]);
     }
   });
 

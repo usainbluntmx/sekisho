@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — 2026-10-26
+
+**Breaking: uses the SplitVaultFactory v2 on Avalanche Fuji (`0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807`).** Vault addresses change: a seller's v2 `payTo` is different from their v1 vault.
+
+- `getPayTo` uses the factory's `resolvePayTo`: the registered vault, the predicted one if it doesn't exist yet, or an error if the seller rotated to another address.
+- New merchant rotation (two-step): `proposeMerchant`, `acceptMerchant`, `pendingMerchant`.
+- ABIs updated for v2 (rotation functions and custom errors).
+- Removed (deprecated since 0.1.2 / 0.1.3): `DEFAULT_FACILITATOR_URL` and `NetworkConfig.rpcUrl` (use `rpcUrls`).
+
 ## 0.1.5 — 2026-10-26
 
 - Fix: the gas cap now applies to every transaction the SDK sends, not only self-facilitated settlements. `SekishoClient.createVault` and `distribute` estimate gas and cap it (estimate + 20%, max 1,000,000), so an RPC returning an absurd `eth_estimateGas` no longer fails with "exceeds block gas limit".

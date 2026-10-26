@@ -10,7 +10,6 @@ export { createSekishoTransport } from "./transport.js";
 export { settlementGasLimit, SETTLEMENT_GAS_CAP } from "./gas.js";
 export {
   createPaymentOption,
-  DEFAULT_FACILITATOR_URL,
   type PaymentOptionParams,
   type SekishoPaymentOption,
 } from "./x402.js";
