@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import type { Context, MiddlewareHandler } from "hono";
+import { bodyLimit } from "hono/body-limit";
 
 /** Comparación en tiempo constante (no filtra secretos por diferencias de tiempo). */
 export function safeEqual(a: string, b: string): boolean {
@@ -52,3 +53,12 @@ export function rateLimit({ max, windowMs }: RateLimitOptions): MiddlewareHandle
     await next();
   };
 }
+
+/** Tamaño máximo de body: ningún endpoint de Kanjō necesita más (los webhooks de Meta pesan pocos KB). */
+export const MAX_BODY_BYTES = 64 * 1024;
+
+/** Rechaza con 413 cualquier body mayor a MAX_BODY_BYTES, antes de parsearlo o validarlo. */
+export const limitBody: MiddlewareHandler = bodyLimit({
+  maxSize: MAX_BODY_BYTES,
+  onError: (c) => c.text("Payload too large", 413),
+});

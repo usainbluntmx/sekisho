@@ -17,7 +17,7 @@ import {
 import { startDistributionScheduler } from "./distributor.js";
 import { startOutboxWorker } from "./outbox.js";
 import { recoverPaidNotifications } from "./notify.js";
-import { rateLimit, safeEqual } from "./security.js";
+import { limitBody, rateLimit, safeEqual } from "./security.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
@@ -29,6 +29,9 @@ process.on("unhandledRejection", (reason) => {
 });
 
 const app = new Hono();
+
+// Ningún body por encima de 64 KB llega a parsearse (protege JSON.parse y validaciones con zod)
+app.use("*", limitBody);
 
 app.get("/", (c) => c.json({ service: "Kanjō", status: "ok" }));
 

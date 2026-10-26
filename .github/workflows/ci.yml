@@ -36,6 +36,7 @@ jobs:
           cache: npm
           cache-dependency-path: sdk/package-lock.json
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=critical
       - run: npm run build
       - run: npm test
 
@@ -53,6 +54,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/kanjo/package-lock.json
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=critical
       - run: npm run typecheck
       - run: npm run test:safety
       - run: npm run test:distribution
@@ -73,4 +75,5 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=critical
       - run: npm run build

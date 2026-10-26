@@ -12,7 +12,7 @@ process.env.NOTIFY_CHANNEL = "console";
 const { Hono } = await import("hono");
 const { db } = await import("../db.js");
 const store = await import("../store.js");
-const { rateLimit, safeEqual } = await import("../security.js");
+const { limitBody, MAX_BODY_BYTES, rateLimit, safeEqual } = await import("../security.js");
 const outbox = await import("../outbox.js");
 
 let failures = 0;
@@ -76,6 +76,15 @@ db.prepare("UPDATE outbox SET attempts = ? WHERE dedupe_key = 'k2'").run(outbox.
 const r4 = await outbox.processOutbox(fail);
 const row4 = db.prepare("SELECT status FROM outbox WHERE dedupe_key = 'k2'").get() as { status: string };
 check("Tras el último intento queda como fallido", r4.failed === 1 && row4.status === "failed");
+
+console.log("─── Tamaño de body ───");
+const limited = new Hono();
+limited.use("*", limitBody);
+limited.post("/x", async (c) => c.text(String((await c.req.text()).length)));
+const small = await limited.request("/x", { method: "POST", body: "a".repeat(1024) });
+const big = await limited.request("/x", { method: "POST", body: "a".repeat(MAX_BODY_BYTES + 1) });
+check("Un body normal pasa", small.status === 200);
+check("Un body mayor a 64 KB recibe 413 sin procesarse", big.status === 413);
 
 db.close();
 cleanup();
