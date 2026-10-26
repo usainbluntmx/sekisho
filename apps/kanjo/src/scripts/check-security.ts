@@ -10,7 +10,7 @@ process.env.DB_PATH = TEST_DB;
 process.env.NOTIFY_CHANNEL = "console";
 
 const { Hono } = await import("hono");
-const { db } = await import("../db.js");
+const { db, backfillPayTokens } = await import("../db.js");
 const store = await import("../store.js");
 const { limitBody, MAX_BODY_BYTES, rateLimit, safeEqual } = await import("../security.js");
 const outbox = await import("../outbox.js");
@@ -49,6 +49,17 @@ const o1 = store.createOrder("test", "5210000000001", [{ productId: Number(lastI
 const o2 = store.createOrder("test", "5210000000001", [{ productId: Number(lastInsertRowid), quantity: 1 }]).order;
 check("Cada pedido tiene un token de 128 bits (22 caracteres base64url)", o1.pay_token?.length === 22);
 check("Los tokens son distintos entre pedidos", o1.pay_token !== o2.pay_token);
+
+
+// Pedidos viejos (sin token): los pendientes reciben uno; los pagados no se tocan
+db.prepare("UPDATE orders SET pay_token = NULL WHERE id IN (?, ?)").run(o1.id, o2.id);
+db.prepare("UPDATE orders SET status = 'paid' WHERE id = ?").run(o2.id);
+check("El backfill asigna token solo a pedidos pendientes", backfillPayTokens() === 1);
+const tokenOf = (id: string) =>
+  (db.prepare("SELECT pay_token FROM orders WHERE id = ?").get(id) as { pay_token: string | null }).pay_token;
+check("El pedido pendiente queda con un token de 128 bits", tokenOf(o1.id)?.length === 22);
+check("El pedido pagado sigue sin token", tokenOf(o2.id) === null);
+check("Correr el backfill otra vez no cambia nada", backfillPayTokens() === 0);
 
 console.log("─── Bandeja de salida (BUG-005) ───");
 const fail: (to: string, body: string) => Promise<void> = async () => {

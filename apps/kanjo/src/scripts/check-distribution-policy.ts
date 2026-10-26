@@ -1,7 +1,13 @@
 import { parseUnits } from "viem";
 import { decide, type DistributionPolicy } from "../distribution-policy.js";
 
-const policy: DistributionPolicy = { minAtomic: parseUnits("5", 6), maxHours: 24, feeChangeHours: 48 };
+const policy: DistributionPolicy = {
+  minAtomic: parseUnits("5", 6),
+  maxHours: 24,
+  ageMinAtomic: parseUnits("0.25", 6),
+  staleHours: 168,
+  feeChangeHours: 48,
+};
 const usdc = (v: string) => parseUnits(v, 6);
 
 let failures = 0;
@@ -14,7 +20,9 @@ check("Vault vacío → no reparte", decide({ pendingAtomic: 0n, oldestUndistrib
 check("Vault vacío con --force → tampoco reparte", decide({ pendingAtomic: 0n, oldestUndistributedHours: null }, policy, true).reason === "empty");
 check("0.02 USDC y 1 h → espera", decide({ pendingAtomic: usdc("0.02"), oldestUndistributedHours: 1 }, policy).reason === "waiting");
 check("5 USDC → reparte por umbral", decide({ pendingAtomic: usdc("5"), oldestUndistributedHours: 1 }, policy).reason === "threshold");
-check("0.02 USDC y 24 h → reparte por antigüedad", decide({ pendingAtomic: usdc("0.02"), oldestUndistributedHours: 24 }, policy).reason === "max_age");
+check("0.02 USDC y 24 h → espera (el gas costaría más que la comisión)", decide({ pendingAtomic: usdc("0.02"), oldestUndistributedHours: 24 }, policy).reason === "waiting");
+check("0.25 USDC y 24 h → reparte por antigüedad", decide({ pendingAtomic: usdc("0.25"), oldestUndistributedHours: 24 }, policy).reason === "max_age");
+check("0.02 USDC y 7 días → reparte (no se retiene al vendedor)", decide({ pendingAtomic: usdc("0.02"), oldestUndistributedHours: 168 }, policy).reason === "stale");
 check("0.02 USDC sin registro de pagos → espera", decide({ pendingAtomic: usdc("0.02"), oldestUndistributedHours: null }, policy).reason === "waiting");
 check("0.02 USDC con --force → reparte", decide({ pendingAtomic: usdc("0.02"), oldestUndistributedHours: 1 }, policy, true).reason === "forced");
 

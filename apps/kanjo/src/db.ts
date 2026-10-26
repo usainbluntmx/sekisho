@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -80,3 +81,20 @@ if (!hasColumn("orders", "stock_issue")) {
 if (!hasColumn("orders", "pay_token")) {
   db.exec("ALTER TABLE orders ADD COLUMN pay_token TEXT");
 }
+
+
+/**
+ * Pedidos pendientes creados antes de que existiera pay_token: se les asigna uno para que
+ * el agente pueda volver a mandar un link válido (order_status). Devuelve cuántos actualizó.
+ */
+export function backfillPayTokens(): number {
+  const missing = db
+    .prepare("SELECT id FROM orders WHERE pay_token IS NULL AND status = 'pending_payment'")
+    .all() as { id: string }[];
+  const update = db.prepare("UPDATE orders SET pay_token = ? WHERE id = ? AND pay_token IS NULL");
+  for (const { id } of missing) update.run(randomBytes(16).toString("base64url"), id);
+  return missing.length;
+}
+
+const backfilled = backfillPayTokens();
+if (backfilled > 0) console.log(`[db] ${backfilled} pedido(s) pendiente(s) recibieron su token de pago`);

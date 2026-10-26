@@ -98,7 +98,8 @@ export async function runDistribution(force = false): Promise<DistributionResult
           result.tx = tx;
         } else if (decision.reason === "waiting") {
           console.log(
-            `[distributor] ${store.id}: ${result.pending} USDC pendientes, esperando (mínimo ${formatUnits(policy.minAtomic, 6)} USDC o ${policy.maxHours} h)`
+            `[distributor] ${store.id}: ${result.pending} USDC pendientes, esperando ` +
+              `(${formatUnits(policy.minAtomic, 6)} USDC, ${policy.maxHours} h con ≥ ${formatUnits(policy.ageMinAtomic, 6)} USDC, o ${policy.staleHours} h)`
           );
         }
 
