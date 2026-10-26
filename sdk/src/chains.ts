@@ -24,7 +24,7 @@ export const NETWORKS: Record<SekishoNetwork, NetworkConfig> = {
     explorer: "https://testnet.snowtrace.io",
     usdc: "0x5425890298aed601595a70AB815c96711a31Bc65",
     usdcEip712: { name: "USD Coin", version: "2" },
-    factory: "0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807", // SplitVaultFactory v2
+    factory: "0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab", // SplitVaultFactory v3
   },
   avalanche: {
     chain: avalanche,

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-10-26
+
+**Breaking: uses the SplitVaultFactory v3 on Avalanche Fuji (`0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab`).** Vault addresses change again: a seller's v3 `payTo` is different from their v2 vault.
+
+- v3 contracts: every fee change is scheduled and applies 7 days later, so already-collected funds can always be split with the fee in force when they were charged.
+- `getConfig()` now includes `feeChange` (the scheduled change, or `null`).
+- New `getFeeChange()` and `FeeChange` type.
+
 ## 0.2.1 — 2026-10-26
 
 - Fix: `pending()` now reports payments sitting at a vault address that hasn't been deployed yet (it reads the USDC balance of the predicted address and applies the current fee). Before, it returned 0 until the vault existed, so batch distributors never triggered the first `distribute()`.

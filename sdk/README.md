@@ -4,7 +4,7 @@
 
 Sekisho turns any API or MCP tool into a paid endpoint that AI agents can pay for with USDC, using the [x402](https://x402.org) protocol. Every payment lands in the seller's on-chain **SplitVault**, which distributes the platform fee and the seller's share automatically.
 
-> Status: `v0.2.0` — Avalanche Fuji testnet.
+> Status: `v0.3.0` — Avalanche Fuji testnet.
 
 ## Install
 
@@ -23,7 +23,7 @@ Agent ──(x402, USDC)──▶ Seller's SplitVault ──distribute()──�
 
 - Each seller gets a **deterministic vault address** (`payTo`) — payments can arrive before the vault is deployed.
 - `distribute()` is permissionless: funds can only go to the seller and the platform treasury.
-- Platform fee is hard-capped at **10%** in the contract.
+- Platform fee is hard-capped at **10%** in the contract, and **every fee change takes 7 days** to apply (see below).
 - Vaults have **no withdraw function**: everything that enters can only leave through `distribute()`, to the treasury and the seller, in the contract's proportion.
 - Sellers can **rotate** the address that receives their payouts (two-step, see below).
 
@@ -88,6 +88,15 @@ const client = createSekishoMcpClient({ account, maxPerPayment: "0.05" });
 const result = await client.callTool("premium_insight", { topic: "Avalanche" });
 ```
 
+## Fee changes
+
+The platform fee can only change through a scheduled change that applies **7 days later** (`FEE_CHANGE_DELAY`, fixed in the contract). Since `distribute()` is permissionless, anything already collected can be split with the current fee before a change applies.
+
+```ts
+const { feeBps, feeChange } = await sekisho.getConfig();
+// feeChange: null, or { feeBps, effectiveAt } for a scheduled change
+```
+
 ## Merchant rotation
 
 A seller can move their vault to a new address in two steps. Only the current seller can propose, and only the proposed address can accept, so a typo never redirects payouts. Anything pending in the vault is paid to the **previous** address before the switch.
@@ -119,9 +128,9 @@ const sekisho = createSekishoClient({
 
 | Network | SplitVaultFactory | USDC |
 | --- | --- | --- |
-| Avalanche Fuji (`eip155:43113`) | [`0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807`](https://testnet.snowtrace.io/address/0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807) (v2) | `0x5425890298aed601595a70AB815c96711a31Bc65` |
+| Avalanche Fuji (`eip155:43113`) | [`0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab`](https://testnet.snowtrace.io/address/0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab) (v3) | `0x5425890298aed601595a70AB815c96711a31Bc65` |
 
-The v1 factory (`0xA1967201adD1Ac57d1c72D04Ca4d9159B98C8C5D`) is deprecated and used by SDK versions up to 0.1.5.
+Deprecated factories on Fuji: v2 `0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807` (SDK 0.2.x) and v1 `0xA1967201adD1Ac57d1c72D04Ca4d9159B98C8C5D` (SDK ≤ 0.1.5).
 
 ## License
 

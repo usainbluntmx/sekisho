@@ -1,17 +1,20 @@
 import { parseAbi } from "viem";
 
-/** SplitVaultFactory v2 (rotación de merchant + resolvePayTo). */
+/** SplitVaultFactory v3 (rotación de merchant, resolvePayTo y cambios de fee con retraso). */
 export const splitVaultFactoryAbi = parseAbi([
   "function predictVault(address merchant) view returns (address)",
   "function resolvePayTo(address merchant) view returns (address)",
   "function vaultOf(address merchant) view returns (address)",
   "function treasury() view returns (address)",
   "function feeBps() view returns (uint16)",
+  "function pendingFeeChange() view returns (uint16 newFeeBps, uint64 effectiveAt)",
+  "function FEE_CHANGE_DELAY() view returns (uint64)",
   "function settlementToken() view returns (address)",
   "function createVault(address merchant) returns (address vault)",
   "error MerchantRetired()",
   "error VaultExists()",
   "error CounterfactualFunds()",
+  "error NoFeeChange()",
 ]);
 
 /** SplitVault v2. No tiene funciones de retiro: solo distribute() mueve fondos. */

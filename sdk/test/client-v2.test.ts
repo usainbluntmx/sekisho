@@ -86,8 +86,27 @@ const RESOLVE_PAY_TO = toFunctionSelector("resolvePayTo(address)");
 const VAULT_OF = toFunctionSelector("vaultOf(address)");
 
 describe("SekishoClient v2", () => {
-  it("uses the v2 factory on Fuji", () => {
-    expect(FUJI.factory).toBe("0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807");
+  it("uses the v3 factory on Fuji", () => {
+    expect(FUJI.factory).toBe("0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab");
+  });
+
+  it("getFeeChange returns null when nothing is scheduled and the change when there is one", async () => {
+    const effectiveAt = 1_800_000_000;
+    let scheduled = false;
+    const rpc = await mockRpc(() => ({
+      result: scheduled
+        ? (`0x${(500).toString(16).padStart(64, "0")}${effectiveAt.toString(16).padStart(64, "0")}` as Hex)
+        : (`0x${"00".repeat(64)}` as Hex),
+    }));
+    try {
+      const sekisho = createSekishoClient({ rpcUrl: rpc.url });
+      expect(await sekisho.getFeeChange()).toBeNull();
+      scheduled = true;
+      expect(await sekisho.getFeeChange()).toEqual({ feeBps: 500, effectiveAt: new Date(effectiveAt * 1000) });
+      expect(rpc.calls.at(-1)!.startsWith(toFunctionSelector("pendingFeeChange()"))).toBe(true);
+    } finally {
+      rpc.server.close();
+    }
   });
 
   it("getPayTo asks the factory for resolvePayTo", async () => {

@@ -3,6 +3,7 @@ export {
   type SekishoClient,
   type SekishoClientOptions,
   type SekishoConfig,
+  type FeeChange,
   type PendingSplit,
 } from "./client.js";
 export { NETWORKS, type NetworkConfig, type SekishoNetwork } from "./chains.js";

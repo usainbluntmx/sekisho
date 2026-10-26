@@ -22,13 +22,23 @@ export interface SekishoClientOptions {
   account?: Account;
 }
 
+export interface FeeChange {
+  /** Fee que aplicará (en bps). */
+  feeBps: number;
+  /** Desde cuándo aplica. */
+  effectiveAt: Date;
+}
+
 export interface SekishoConfig {
   network: SekishoNetwork;
   chainId: number;
   factory: Address;
   usdc: Address;
   treasury: Address;
+  /** Fee vigente en este momento (bps). */
   feeBps: number;
+  /** Cambio de fee programado que todavía no aplica, o null. */
+  feeChange: FeeChange | null;
 }
 
 export interface PendingSplit {
@@ -43,8 +53,10 @@ export interface SekishoClient {
   network: SekishoNetwork;
   config: NetworkConfig;
   publicClient: PublicClient;
-  /** Tesorería y fee actuales de la plataforma. */
+  /** Tesorería, fee vigente y cambio de fee programado (si hay). */
   getConfig(): Promise<SekishoConfig>;
+  /** Cambio de fee programado que todavía no aplica (los cambios tardan 7 días), o null. */
+  getFeeChange(): Promise<FeeChange | null>;
   /**
    * Dirección payTo del vendedor (su vault), exista o no todavía.
    * Si el vendedor rotó su vault a otra dirección, lanza un error: cobrarle ahí le pagaría a otro.
@@ -110,12 +122,22 @@ export function createSekishoClient(options: SekishoClientOptions = {}): Sekisho
     return wallet.writeContract({ ...call, gas });
   }
 
+  async function getFeeChange(): Promise<FeeChange | null> {
+    const [feeBps, effectiveAt] = await publicClient.readContract({
+      address: factory,
+      abi: splitVaultFactoryAbi,
+      functionName: "pendingFeeChange",
+    });
+    return effectiveAt === 0n ? null : { feeBps, effectiveAt: new Date(Number(effectiveAt) * 1000) };
+  }
+
   async function getConfig(): Promise<SekishoConfig> {
-    const [treasury, feeBps] = await Promise.all([
+    const [treasury, feeBps, feeChange] = await Promise.all([
       publicClient.readContract({ address: factory, abi: splitVaultFactoryAbi, functionName: "treasury" }),
       publicClient.readContract({ address: factory, abi: splitVaultFactoryAbi, functionName: "feeBps" }),
+      getFeeChange(),
     ]);
-    return { network, chainId: config.chain.id, factory, usdc: config.usdc, treasury, feeBps };
+    return { network, chainId: config.chain.id, factory, usdc: config.usdc, treasury, feeBps, feeChange };
   }
 
   async function getPayTo(merchant: Address): Promise<Address> {
@@ -230,6 +252,7 @@ export function createSekishoClient(options: SekishoClientOptions = {}): Sekisho
     config,
     publicClient,
     getConfig,
+    getFeeChange,
     getPayTo,
     isVaultDeployed,
     createVault,
