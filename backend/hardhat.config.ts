@@ -6,7 +6,7 @@ import "hardhat-gas-reporter";
 import "solidity-coverage";
 import * as dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
 const AVALANCHE_RPC_URL =

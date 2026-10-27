@@ -85,9 +85,8 @@ async function main() {
     console.log(`${ok ? "✔" : "✘"} ${label}`);
     if (!ok) failures++;
   }
-  if (network.name === "avalancheFuji") {
-    console.log(`\nSnowtrace: https://testnet.snowtrace.io/tx/${accept.hash}`);
-  }
+  const explorer = { avalancheFuji: "https://testnet.snowtrace.io", avalanche: "https://snowtrace.io" }[network.name];
+  if (explorer) console.log(`\nSnowtrace: ${explorer}/tx/${accept.hash}`);
   if (failures > 0) {
     process.exitCode = 1;
     console.error(`\n❌ ${failures} comprobación(es) fallaron`);
