@@ -1,25 +1,26 @@
 import { formatUnits } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { createSekishoClient, createSekishoFetch } from "../src/index.js";
+import { MERCHANT, network, requireKey } from "./env.js";
 
-const SERVER_URL = "http://localhost:4021/premium";
-const MERCHANT = "0xAdc41EBCd5e6cBaC36B688a1c447262A17c56dae";
+const SERVER_URL = process.env.SERVER_URL ?? "http://localhost:4021/premium";
+// Segundos que espera a que el servidor reparta (0 para no esperar)
+const WAIT_SECONDS = Number(process.env.WAIT_DISTRIBUTION_SECONDS ?? 60);
 
-const privateKey = process.env.AGENT_PRIVATE_KEY as `0x${string}` | undefined;
-if (!privateKey) throw new Error("Falta AGENT_PRIVATE_KEY en sdk/.env");
-
-const account = privateKeyToAccount(privateKey);
+const account = privateKeyToAccount(requireKey("AGENT_PRIVATE_KEY"));
 const fmt = (v: bigint) => formatUnits(v, 6);
 
-// Cliente Sekisho (lectura + distribute) y fetch con pagos
-const sekisho = createSekishoClient({ network: "avalancheFuji", account });
+// Cliente Sekisho (solo lectura) y fetch con pagos
+const sekisho = createSekishoClient({ network });
 const { fetch: payFetch, httpClient } = createSekishoFetch({
   account,
-  maxPerPayment: "0.05", // el agente nunca paga más de 0.05 USDC por petición
+  network,
+  maxPerPayment: "0.05", // nunca más de 0.05 USDC por petición
+  maxPerDay: "1", // ni más de 1 USDC cada 24 horas
 });
 
 console.log("─────────────────────────────────────────────");
-console.log("Agente:  ", account.address);
+console.log("Agente:  ", account.address, `(${network})`);
 console.log("Endpoint:", SERVER_URL);
 
 const before = await sekisho.pending(MERCHANT);
@@ -41,12 +42,19 @@ const after = await sekisho.pending(MERCHANT);
 console.log("─────────────────────────────────────────────");
 console.log(`[2] En el vault: ${fmt(after.total)} USDC → fee ${fmt(after.fee)} | vendedor ${fmt(after.merchantAmount)}`);
 
-// 3) Repartir (cualquiera puede llamarlo; aquí lo hace el agente)
-if (after.total > 0n) {
-  const hash = await sekisho.distribute(MERCHANT);
-  console.log(`[3] Reparto: ${sekisho.config.explorer}/tx/${hash}`);
+// 3) El agente no reparte: lo hace el repartidor del servidor según su política
+if (WAIT_SECONDS > 0 && after.total > 0n) {
+  console.log(`[3] Esperando hasta ${WAIT_SECONDS} s a que el servidor reparta...`);
+  const deadline = Date.now() + WAIT_SECONDS * 1000;
+  let current = after;
+  while (current.total > 0n && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    current = await sekisho.pending(MERCHANT);
+  }
+  console.log(
+    current.total === 0n
+      ? "[3] Repartido: el vault quedó en 0 sin intervención manual."
+      : `[3] Siguen ${fmt(current.total)} USDC en el vault: la política del servidor todavía no reparte (DISTRIBUTE_MIN_USDC).`
+  );
 }
-
-const final = await sekisho.pending(MERCHANT);
-console.log("[3] Saldo en vault después:", fmt(final.total), "USDC");
 console.log("─────────────────────────────────────────────");

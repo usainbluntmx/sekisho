@@ -12,6 +12,7 @@ import { createPaymentOption } from "./x402.js";
 import { createSekishoPaymentClient, type SekishoAgentOptions } from "./agent.js";
 import { toFacilitatorClient } from "./facilitator.js";
 import { SDK_VERSION } from "./version.js";
+import type { SekishoDistributor } from "./distributor.js";
 
 // ─────────────────────────── Servidor ───────────────────────────
 
@@ -25,6 +26,11 @@ export interface SekishoMcpPaywallOptions {
   price: string;
   /** Se ejecuta después de cada pago liquidado. */
   onSettled?: (info: { toolName: string; transaction: string }) => void | Promise<void>;
+  /**
+   * Repartidor (createSekishoDistributor) que se avisa en cada pago liquidado:
+   * registra el pago y revisa la política sin retrasar la respuesta de la tool.
+   */
+  distributor?: SekishoDistributor;
 }
 
 export type SekishoMcpPaywall = ReturnType<typeof createPaymentWrapper>;
@@ -55,6 +61,10 @@ export async function createSekishoMcpPaywall(
     accepts,
     hooks: {
       onAfterSettlement: async ({ toolName, settlement }) => {
+        if (options.distributor) {
+          options.distributor.notePayment(options.merchant);
+          void options.distributor.check().catch(() => {});
+        }
         await options.onSettled?.({ toolName, transaction: settlement.transaction });
       },
     },

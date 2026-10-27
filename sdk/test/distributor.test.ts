@@ -145,12 +145,21 @@ describe("createSekishoDistributor", () => {
     expect(onError).toHaveBeenCalledWith(expect.any(Error), MERCHANT);
   });
 
-  it("no corre dos revisiones a la vez", async () => {
-    const { client } = mockSekisho({ [MERCHANT]: usdc("5") });
+  it("no corre dos revisiones a la vez, pero repite la revisión pedida a medias", async () => {
+    const balances: Record<string, bigint> = { [MERCHANT]: usdc("5") };
+    const { client, distribute } = mockSekisho(balances);
+    // Mientras se reparte llega un pago nuevo de 7 USDC
+    distribute.mockImplementationOnce(async (merchant: Address) => {
+      balances[merchant] = usdc("7");
+      return TX;
+    });
     const distributor = createSekishoDistributor({ sekisho: client, merchants: [MERCHANT], log: () => {} });
-    const [first, second] = await Promise.all([distributor.check(), distributor.check()]);
-    expect(first).toHaveLength(1);
+    const first = distributor.check();
+    const second = await distributor.check();
     expect(second).toHaveLength(0);
+    expect(await first).toHaveLength(1);
+    await vi.waitFor(() => expect(distribute).toHaveBeenCalledTimes(2));
+    expect(balances[MERCHANT]).toBe(0n);
   });
 
   it("acepta la lista de vendedores como función", async () => {

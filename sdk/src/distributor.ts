@@ -104,7 +104,10 @@ export interface SekishoDistributor {
   readonly policy: Readonly<DistributionPolicy>;
   /** Registra un pago liquidado (llámalo en onAfterSettle) para medir su antigüedad. */
   notePayment(merchant: Address, at?: Date): void;
-  /** Revisa cada vendedor y reparte si la política lo indica. Si ya hay una revisión en curso, devuelve []. */
+  /**
+   * Revisa cada vendedor y reparte si la política lo indica. Si ya hay una revisión en curso,
+   * devuelve [] y programa otra al terminar la actual (un pago nuevo nunca se queda sin revisar).
+   */
   check(options?: { force?: boolean }): Promise<DistributionResult[]>;
   /** Revisión periódica; la primera corre de inmediato. */
   start(): void;
@@ -134,6 +137,7 @@ export function createSekishoDistributor(options: SekishoDistributorOptions): Se
       log(`[sekisho] Reparto${merchant ? ` de ${merchant}` : ""} falló, se reintenta en la próxima revisión: ${errorMessage(error)}`));
   const firstPendingAt = new Map<Address, number>();
   let running = false;
+  let rerun = false;
   let timer: ReturnType<typeof setInterval> | undefined;
 
   function notePayment(merchant: Address, at: Date = new Date()): void {
@@ -148,7 +152,10 @@ export function createSekishoDistributor(options: SekishoDistributorOptions): Se
   }
 
   async function check({ force = false }: { force?: boolean } = {}): Promise<DistributionResult[]> {
-    if (running) return [];
+    if (running) {
+      rerun = true;
+      return [];
+    }
     running = true;
     try {
       let merchants: Address[];
@@ -211,6 +218,10 @@ export function createSekishoDistributor(options: SekishoDistributorOptions): Se
       return results;
     } finally {
       running = false;
+      if (rerun) {
+        rerun = false;
+        void check().catch((error) => onError(error));
+      }
     }
   }
 

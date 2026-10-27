@@ -13,6 +13,8 @@
     "example:seller": "node --env-file=.env --import tsx examples/seller-server.ts",
     "example:agent": "node --env-file=.env --import tsx examples/agent-pay.ts",
     "example:mcp": "node --env-file=.env --import tsx examples/agent-mcp.ts",
+    "example:keeper": "node --env-file=.env --import tsx examples/keeper.ts",
+    "typecheck:examples": "tsc --noEmit -p tsconfig.examples.json",
     "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [

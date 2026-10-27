@@ -4,30 +4,34 @@ import { z } from "zod";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   createSekishoClient,
+  createSekishoDistributor,
   createSekishoFacilitator,
   createSekishoMcpPaywall,
 } from "../src/index.js";
+import { MERCHANT, network, policyFromEnv, requireKey } from "./env.js";
 
-const MERCHANT = (process.env.MERCHANT_ADDRESS ??
-  "0xAdc41EBCd5e6cBaC36B688a1c447262A17c56dae") as `0x${string}`;
+const account = privateKeyToAccount(requireKey("FACILITATOR_PRIVATE_KEY"));
 
-const key = process.env.FACILITATOR_PRIVATE_KEY as `0x${string}` | undefined;
-if (!key) throw new Error("Falta FACILITATOR_PRIVATE_KEY en sdk/.env");
-const account = privateKeyToAccount(key);
+const sekisho = createSekishoClient({ network, account });
+const facilitator = createSekishoFacilitator({ account, network });
 
-const sekisho = createSekishoClient({ network: "avalancheFuji", account });
-const facilitator = createSekishoFacilitator({ account, network: "avalancheFuji" });
+// Reparto automático por política (en stdio, la bitácora va a stderr)
+const distributor = createSekishoDistributor({
+  sekisho,
+  merchants: [MERCHANT],
+  policy: policyFromEnv(),
+  log: (message) => console.error(message),
+});
 
-// Paywall: 0.01 USDC por llamada, con reparto automático después de cada pago
+// Paywall: 0.01 USDC por llamada; cada pago avisa al repartidor
 const paid = await createSekishoMcpPaywall({
   sekisho,
   facilitator,
   merchant: MERCHANT,
   price: "0.01",
-  onSettled: async ({ toolName, transaction }) => {
+  distributor,
+  onSettled: ({ toolName, transaction }) => {
     console.error(`[sekisho] ${toolName} pagado → ${sekisho.config.explorer}/tx/${transaction}`);
-    const hash = await sekisho.distribute(MERCHANT);
-    console.error(`[sekisho] reparto     → ${sekisho.config.explorer}/tx/${hash}`);
   },
 });
 
@@ -54,4 +58,5 @@ server.tool(
 );
 
 await server.connect(new StdioServerTransport());
-console.error("[sekisho] MCP server listo (stdio)");
+distributor.start();
+console.error(`[sekisho] MCP server listo (stdio, ${network})`);

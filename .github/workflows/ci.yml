@@ -43,6 +43,7 @@ jobs:
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=critical
       - run: npm run build
+      - run: npm run typecheck:examples
       - run: npm test
 
   kanjo:
