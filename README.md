@@ -5,7 +5,7 @@
 - **Sekisho** (関所, *checkpoint*): on-chain payment layer + SDK. Any API or MCP tool can charge USDC via [x402](https://x402.org); every payment lands in the seller's **SplitVault**, which splits the platform fee and the seller's share.
 - **Kanjō** (勘定, *the bill*): an AI sales agent for small businesses. It chats with customers, builds orders and collects payment through Sekisho.
 
-> **Status:** running on Avalanche Fuji testnet. Do not use with real funds.
+> **Status:** live on **Avalanche C-Chain mainnet** (Sekisho contracts and SDK). Kanjō runs on Fuji testnet. See [SECURITY.md](SECURITY.md).
 > Website: https://sekisho.zerotwolabs.xyz · SDK: [`@zero-two-labs/sekisho`](https://www.npmjs.com/package/@zero-two-labs/sekisho)
 
 ## Repository
@@ -32,7 +32,18 @@ Customer ──chat──▶ Kanjō agent (Claude) ──▶ order + payment lin
                              Treasury (1.5%)                  Merchant (98.5%)
 ```
 
-## Deployments — Avalanche Fuji (`eip155:43113`)
+## Deployments
+
+**Avalanche C-Chain mainnet** (`eip155:43114`)
+
+| Contract / role | Address |
+| --- | --- |
+| `SplitVaultFactory` (v3) | [`0xeB43A8b678E0b4ee7f11bd2867bC8B5EaC9444A6`](https://snowtrace.io/address/0xeB43A8b678E0b4ee7f11bd2867bC8B5EaC9444A6) |
+| `SplitVault` (v3 implementation) | [`0x24A48f2cCFaaC60918F81c25B56380A3610F75F5`](https://snowtrace.io/address/0x24A48f2cCFaaC60918F81c25B56380A3610F75F5) |
+| Owner and treasury (Safe 2-of-3) | [`0xbABB7B7C35438B2Ab646da3C820859062ACEA3Dc`](https://snowtrace.io/address/0xbABB7B7C35438B2Ab646da3C820859062ACEA3Dc) |
+| USDC (Circle) | `0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E` |
+
+**Avalanche Fuji testnet** (`eip155:43113`)
 
 | Contract / role | Address |
 | --- | --- |
@@ -50,7 +61,7 @@ Deprecated factories on Fuji: v2 [`0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807`](
 - **Permissionless, fixed-destination splits:** anyone can call `distribute()`, but funds can only go to the treasury and the merchant.
 - **No withdraw function:** everything that enters a vault can only leave through `distribute()`. Vaults reject native AVAX.
 - **Two-step merchant rotation:** only the current merchant can propose a new payout address and only that address can accept; anything pending is paid to the previous address first.
-- **Separated keys:** owner and treasury are cold wallets; the server's operator key settles payments and triggers splits but holds **no permissions** on the contracts.
+- **Separated keys:** on mainnet, owner and treasury are a Safe 2-of-3 multisig (cold wallets on Fuji); the server's operator key settles payments and triggers splits but holds **no permissions** on the contracts.
 - **No lost payments:** a settled payment is always recorded, even if stock ran out (the order is flagged for refund). A per-order lock prevents double settlement; WhatsApp webhooks are deduplicated by message id.
 
 ## Quickstart
@@ -98,7 +109,6 @@ With a 1.5% fee, the minimum viable ticket is **~$0.30** splitting every order a
 - Mobile checkout from WhatsApp's in-app browser (WalletConnect or embedded wallets)
 - Fiat on-ramp (SPEI → USDC into the same vault) through a regulated provider
 - `batch-settlement` x402 scheme for sub-cent MCP micropayments
-- Mainnet with a multisig owner
 
 ## License
 

@@ -5,7 +5,8 @@ const NPM = "https://www.npmjs.com/package/@zero-two-labs/sekisho";
 const GITHUB = "https://github.com/usainbluntmx/sekisho";
 const DOCS = `${GITHUB}/tree/main/sdk`;
 const KANJO = `${GITHUB}/tree/main/apps/kanjo`;
-const SNOWTRACE = "https://testnet.snowtrace.io/address";
+const SNOWTRACE = "https://snowtrace.io/address";
+const SNOWTRACE_FUJI = "https://testnet.snowtrace.io/address";
 
 // Resaltado mínimo para los ejemplos (palabra clave, texto, comentario)
 const k = (t: string) => `<span class="tk-k">${t}</span>`;
@@ -19,7 +20,7 @@ const examples = [
     file: "server.ts",
     code: `${k("import")} { createSekishoClient, createPaymentOption } ${k("from")} ${s('"@zero-two-labs/sekisho"')};
 
-${k("const")} sekisho = createSekishoClient({ network: ${s('"avalancheFuji"')} });
+${k("const")} sekisho = createSekishoClient({ network: ${s('"avalanche"')} }); ${c("// or \"avalancheFuji\"")}
 ${k("const")} option = ${k("await")} createPaymentOption(sekisho, {
   merchant: ${s('"0xYourWallet"')},
   price: ${s('"0.01"')}, ${c("// USDC per request")}
@@ -58,19 +59,29 @@ server.tool(${s('"premium_insight"')}, ${s('"Costs 0.01 USDC"')}, schema, paid(h
 ];
 
 const deployments = [
-  { label: "Network", value: "Avalanche Fuji · eip155:43113" },
+  { label: "Network", value: "Avalanche C-Chain · eip155:43114" },
   {
     label: "SplitVaultFactory (v3)",
-    value: "0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab",
-    href: `${SNOWTRACE}/0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab`,
+    value: "0xeB43A8b678E0b4ee7f11bd2867bC8B5EaC9444A6",
+    href: `${SNOWTRACE}/0xeB43A8b678E0b4ee7f11bd2867bC8B5EaC9444A6`,
   },
   {
     label: "SplitVault (implementation)",
-    value: "0xD504A30e90A5EEa3d5fd26B588c9854e31819a3C",
-    href: `${SNOWTRACE}/0xD504A30e90A5EEa3d5fd26B588c9854e31819a3C`,
+    value: "0x24A48f2cCFaaC60918F81c25B56380A3610F75F5",
+    href: `${SNOWTRACE}/0x24A48f2cCFaaC60918F81c25B56380A3610F75F5`,
   },
-  { label: "USDC (Circle)", value: "0x5425890298aed601595a70AB815c96711a31Bc65" },
+  {
+    label: "Owner & treasury (Safe 2-of-3)",
+    value: "0xbABB7B7C35438B2Ab646da3C820859062ACEA3Dc",
+    href: `${SNOWTRACE}/0xbABB7B7C35438B2Ab646da3C820859062ACEA3Dc`,
+  },
+  { label: "USDC (Circle)", value: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E" },
   { label: "Platform fee", value: "1.5% · hard cap 10% · changes take 7 days" },
+  {
+    label: "Fuji testnet factory",
+    value: "0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab",
+    href: `${SNOWTRACE_FUJI}/0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab`,
+  },
 ];
 ---
 <Layout
@@ -111,7 +122,7 @@ const deployments = [
             <a class="btn btn--accent" href="#developers">Start building</a>
             <code class="install">npm i @zero-two-labs/sekisho</code>
           </div>
-          <p class="status"><span class="status__dot" aria-hidden="true"></span>Live on Avalanche Fuji testnet</p>
+          <p class="status"><span class="status__dot" aria-hidden="true"></span>Live on Avalanche C-Chain mainnet</p>
         </div>
         <div class="hero__art" aria-hidden="true">
           <div class="gate">
@@ -243,7 +254,7 @@ const deployments = [
             <span class="numeral" aria-hidden="true">三</span>
             <div>
               <h3>Separated keys</h3>
-              <p>Owner and treasury are cold wallets. The server’s operator settles payments with no permissions on the contracts.</p>
+              <p>Owner and treasury are a Safe 2-of-3 multisig. The server’s operator settles payments with no permissions on the contracts.</p>
             </div>
           </div>
           <div class="cell cell--row">
@@ -254,7 +265,7 @@ const deployments = [
             </div>
           </div>
         </div>
-        <p class="note">Currently running on Avalanche Fuji testnet.</p>
+        <p class="note">Live on Avalanche C-Chain mainnet, with a Fuji testnet deployment for development.</p>
       </div>
     </section>
 
@@ -379,7 +390,7 @@ const deployments = [
       </div>
       <div class="footer__meta">
         <span>MIT License</span>
-        <span>Avalanche Fuji testnet</span>
+        <span>Avalanche C-Chain</span>
         <a href={GITHUB}>GitHub</a>
       </div>
     </div>
