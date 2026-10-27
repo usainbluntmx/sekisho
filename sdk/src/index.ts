@@ -35,5 +35,18 @@ export {
   type SekishoMcpClient,
   type SekishoMcpClientOptions,
 } from "./mcp.js";
+export {
+  createSekishoDistributor,
+  decideDistribution,
+  DEFAULT_DISTRIBUTION_POLICY,
+  type DistributionPolicy,
+  type DistributionDecision,
+  type DistributionReason,
+  type DistributionEvent,
+  type DistributionResult,
+  type SekishoDistributor,
+  type SekishoDistributorOptions,
+  type VaultState,
+} from "./distributor.js";
 export { splitVaultAbi, splitVaultFactoryAbi, erc20Abi } from "./abi.js";
 export { SDK_VERSION } from "./version.js";
