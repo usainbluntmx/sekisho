@@ -1,6 +1,6 @@
 # Sekisho 関所 · Kanjō 勘定
 
-**AI agents that sell — and get paid.** x402 payments with automatic revenue split on Avalanche.
+**AI agents that sell — and get paid.** x402 payments on Avalanche with an on-chain revenue split, run in batches by a built-in distributor.
 
 - **Sekisho** (関所, *checkpoint*): on-chain payment layer + SDK. Any API or MCP tool can charge USDC via [x402](https://x402.org); every payment lands in the seller's **SplitVault**, which splits the platform fee and the seller's share.
 - **Kanjō** (勘定, *the bill*): an AI sales agent for small businesses. It chats with customers, builds orders and collects payment through Sekisho.
@@ -57,11 +57,11 @@ Deprecated factories on Fuji: v2 [`0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807`](
 
 ## Security model
 
-- **Fee hard cap and 7-day delay:** `MAX_FEE_BPS = 1000` (10%) is enforced in the contract; not even the owner can exceed it. Every fee change is scheduled and applies 7 days later (`FEE_CHANGE_DELAY`), so collected funds can always be split with the fee in force when they were charged. Current fee: 1.5%.
+- **Fee hard cap and 7-day delay:** `MAX_FEE_BPS = 1000` (10%) is enforced in the contract; not even the owner can exceed it. Every fee change is scheduled and applies 7 days later (`FEE_CHANGE_DELAY`). The fee is applied when funds are split, not when they are charged: calling `distribute()` before the deadline splits pending funds at the old rate, and the SDK's distributor does it automatically when it sees a scheduled increase. Current fee: 1.5%.
 - **Permissionless, fixed-destination splits:** anyone can call `distribute()`, but funds can only go to the treasury and the merchant.
 - **No withdraw function:** everything that enters a vault can only leave through `distribute()`. Vaults reject native AVAX.
 - **Two-step merchant rotation:** only the current merchant can propose a new payout address and only that address can accept; anything pending is paid to the previous address first.
-- **Separated keys:** on mainnet, owner and treasury are a Safe 2-of-3 multisig (cold wallets on Fuji); the server's operator key settles payments and triggers splits but holds **no permissions** on the contracts.
+- **Separated keys:** on mainnet, owner and treasury are a Safe 2-of-3 multisig; on Fuji they are two separate single-key wallets. The server's operator key settles payments and triggers splits but holds **no permissions** on the contracts.
 - **No lost payments:** a settled payment is always recorded, even if stock ran out (the order is flagged for refund). A per-order lock prevents double settlement; WhatsApp webhooks are deduplicated by message id.
 
 ## Quickstart
@@ -78,7 +78,7 @@ cd backend && npm install && npx hardhat test
 npm install @zero-two-labs/sekisho viem
 ```
 
-See [`sdk/README.md`](sdk/README.md) for seller, agent, facilitator and MCP examples.
+See [`sdk/README.md`](sdk/README.md) for seller, agent, facilitator, MCP and distributor (keeper) examples.
 
 **Kanjō** (no WhatsApp account needed for local testing)
 
@@ -102,7 +102,7 @@ With mainnet gas at 2.5 nAVAX and AVAX ≈ $9.5:
 | Settlement (`transferWithAuthorization`) | ~102.8k | ~$0.0025 |
 | Split (`distribute`) | ~92.9k | ~$0.0023 |
 
-With a 1.5% fee, the minimum viable ticket is **~$0.30** splitting every order and **~$0.17** splitting in batches. That is why Kanjō splits in batches (≥ 5 USDC or every 24 h). Run `npm run gas:report` in `apps/kanjo` for live numbers.
+With a 1.5% fee, the minimum viable ticket is **~$0.30** splitting every order and **~$0.17** splitting in batches. That is why the SDK's distributor and Kanjō split in batches (≥ 5 USDC, or every 24 h once at least 0.25 USDC is pending). Run `npm run gas:report` in `apps/kanjo` for live numbers.
 
 ## Roadmap
 

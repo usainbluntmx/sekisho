@@ -9,7 +9,7 @@
   "scripts": {
     "test": "vitest run",
     "build": "tsc",
-    "example:read": "tsx examples/read-config.ts",
+    "example:read": "node --env-file-if-exists=.env --import tsx examples/read-config.ts",
     "example:seller": "node --env-file=.env --import tsx examples/seller-server.ts",
     "example:agent": "node --env-file=.env --import tsx examples/agent-pay.ts",
     "example:mcp": "node --env-file=.env --import tsx examples/agent-mcp.ts",

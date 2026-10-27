@@ -18,7 +18,7 @@ const examples = [
     id: "seller",
     label: "Sell an API",
     file: "server.ts",
-    code: `${k("import")} { createSekishoClient, createPaymentOption } ${k("from")} ${s('"@zero-two-labs/sekisho"')};
+    code: `${k("import")} { createSekishoClient, createPaymentOption, createSekishoDistributor } ${k("from")} ${s('"@zero-two-labs/sekisho"')};
 
 ${k("const")} sekisho = createSekishoClient({ network: ${s('"avalanche"')} }); ${c("// or \"avalancheFuji\"")}
 ${k("const")} option = ${k("await")} createPaymentOption(sekisho, {
@@ -26,7 +26,10 @@ ${k("const")} option = ${k("await")} createPaymentOption(sekisho, {
   price: ${s('"0.01"')}, ${c("// USDC per request")}
 });
 
-app.use(paymentMiddleware({ ${s('"GET /premium"')}: { accepts: [option] } }, server));`,
+app.use(paymentMiddleware({ ${s('"GET /premium"')}: { accepts: [option] } }, server));
+
+${k("const")} distributor = createSekishoDistributor({ sekisho, merchants: [${s('"0xYourWallet"')}] });
+distributor.start(); ${c("// splits in batches: ≥ 5 USDC or every 24 h")}`,
   },
   {
     id: "agent",
@@ -37,6 +40,7 @@ app.use(paymentMiddleware({ ${s('"GET /premium"')}: { accepts: [option] } }, ser
 ${k("const")} { fetch: pay } = createSekishoFetch({
   account,
   maxPerPayment: ${s('"0.05"')}, ${c("// never signs above this")}
+  maxPerDay: ${s('"5"')}, ${c("// nor more than this every 24 h")}
 });
 
 ${k("const")} res = ${k("await")} pay(${s('"https://api.example.com/premium"')});
@@ -52,6 +56,7 @@ ${k("const")} paid = ${k("await")} createSekishoMcpPaywall({
   sekisho, facilitator,
   merchant: ${s('"0xYourWallet"')},
   price: ${s('"0.01"')}, ${c("// per tool call")}
+  distributor, ${c("// splits in batches")}
 });
 
 server.tool(${s('"premium_insight"')}, ${s('"Costs 0.01 USDC"')}, schema, paid(handler));`,
@@ -86,7 +91,7 @@ const deployments = [
 ---
 <Layout
   title="Sekisho — x402 payments on Avalanche"
-  description="Charge any API or MCP tool in USDC. Every payment lands in the seller's on-chain vault and splits itself: platform fee and seller share, enforced by contract."
+  description="Charge any API or MCP tool in USDC. Every payment lands in the seller's on-chain vault, which can only pay out the platform fee and the seller's share, enforced by contract."
 >
   <a class="skip" href="#main">Skip to content</a>
 
@@ -115,8 +120,8 @@ const deployments = [
           <p class="eyebrow">x402 · Avalanche · USDC</p>
           <h1 class="hero__title">The checkpoint for<br />agent payments.</h1>
           <p class="hero__sub">
-            Charge any API or MCP tool in USDC. Every payment lands in the seller’s on-chain vault, which splits it
-            on its own: platform fee and seller share, enforced by contract.
+            Charge any API or MCP tool in USDC. Every payment lands in the seller’s on-chain vault, which can only pay
+            out two ways: platform fee and seller share, enforced by contract. The SDK runs the split for you.
           </p>
           <div class="hero__actions">
             <a class="btn btn--accent" href="#developers">Start building</a>
@@ -159,7 +164,7 @@ const deployments = [
           <li class="cell">
             <span class="step-label">STEP 03</span>
             <h3>Settle &amp; split</h3>
-            <p>The payment settles on Avalanche into the seller’s SplitVault. Splits run in batches: one permissionless call pays the platform fee and the seller everything pending.</p>
+            <p>The payment settles on Avalanche into the seller’s SplitVault. The SDK’s distributor splits in batches: one permissionless call pays the platform fee and the seller everything pending.</p>
             <code>distribute() · batched · permissionless</code>
           </li>
         </ol>
