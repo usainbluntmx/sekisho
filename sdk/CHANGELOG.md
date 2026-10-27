@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 — 2026-10-27
+
+Splits now happen without manual work. No breaking changes; contracts are unchanged (v3).
+
+- **New `createSekishoDistributor()`**: automatic, batched splits for one or many sellers. Policy: `threshold` (≥ 5 USDC), `max_age` (24 h with ≥ 0.25 USDC), `fee_change` (a scheduled fee **increase** within 48 h) and `forced`. `ageMinUsdc` is a floor: dust is never split automatically, because gas would cost more. `notePayment()`, `check()`, `start()`/`stop()`; a check requested while another runs is repeated when it ends.
+- **New `decideDistribution()`** and `DEFAULT_DISTRIBUTION_POLICY` for custom keepers.
+- **`createSekishoMcpPaywall({ distributor })`**: each settled tool call notifies the distributor.
+- **Agent spend caps**: `maxPerSession` (lifetime of the client) and `maxPerDay` (any 24-hour window), besides `maxPerPayment`. Over a cap, the agent refuses to sign. Without them, behavior is unchanged.
+- **Examples**: `seller-server.ts` and `mcp-server.ts` split automatically; new standalone `keeper.ts` (`--once`, `--force`); every example honors `SEKISHO_NETWORK` (`avalancheFuji` by default, `avalanche` for mainnet).
+- **Docs**: the fee is applied at split time — a scheduled change opens a 7-day window in which pending funds can be split at the old rate (the distributor does it for increases). New "Known limits" in `SECURITY.md`.
+
 ## 0.4.0 — 2026-10-27
 
 - **Avalanche C-Chain mainnet** enabled: `network: "avalanche"` uses the SplitVaultFactory v3 at `0xeB43A8b678E0b4ee7f11bd2867bC8B5EaC9444A6` (owner and treasury: Safe 2-of-3) and Circle USDC `0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E`.
@@ -9,7 +20,7 @@
 
 **Breaking: uses the SplitVaultFactory v3 on Avalanche Fuji (`0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab`).** Vault addresses change again: a seller's v3 `payTo` is different from their v2 vault.
 
-- v3 contracts: every fee change is scheduled and applies 7 days later, so already-collected funds can always be split with the fee in force when they were charged.
+- v3 contracts: every fee change is scheduled and applies 7 days later, so pending funds can be split at the old rate before a change applies (see 0.5.0: the fee is applied at split time).
 - `getConfig()` now includes `feeChange` (the scheduled change, or `null`).
 - New `getFeeChange()` and `FeeChange` type.
 

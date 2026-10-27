@@ -1,6 +1,6 @@
 {
   "name": "@zero-two-labs/sekisho",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "x402 payments with automatic revenue split on Avalanche",
   "main": "dist/index.js",
   "directories": {
