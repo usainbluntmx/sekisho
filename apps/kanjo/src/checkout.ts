@@ -23,6 +23,7 @@ import { enqueueDuplicatePayment, enqueueOrderPaid } from "./notify.js";
 import { processOutbox } from "./outbox.js";
 import { endSettlement, isSettling, tryStartSettlement } from "./settlement-guard.js";
 import { safeEqual } from "./security.js";
+import { checkAfterPayment } from "./distributor.js";
 
 const STORE_ID = process.env.STORE_ID ?? "cafe-kanjo";
 const NETWORK = `eip155:${sekisho.config.chain.id}` as const;
@@ -121,6 +122,9 @@ async function afterOrderPaid(orderId: string, tx: string): Promise<void> {
   } catch (error) {
     console.error("[checkout] El reparto falló (el distributor lo recupera):", error);
   }
+
+  // Por lotes: revisa la política en cuanto entra el pago (sin esperar la revisión periódica)
+  checkAfterPayment(store.merchant_address as `0x${string}`);
 }
 
 /**
@@ -280,6 +284,7 @@ export function registerCheckout(app: Hono): void {
         order: found.order,
         items: found.items,
         usdc: sekisho.config.usdc,
+        chainId: sekisho.config.chain.id,
         explorer: EXPLORER,
         payToken: token,
       })

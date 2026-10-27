@@ -1,5 +1,5 @@
 import { createWalletClient, custom, type Address } from "viem";
-import { avalancheFuji } from "viem/chains";
+import { avalanche, avalancheFuji } from "viem/chains";
 import { x402Client } from "@x402/core/client";
 import { wrapFetchWithPayment, x402HTTPClient } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm/exact/client";
@@ -10,9 +10,11 @@ declare global {
   }
 }
 
-const NETWORK = `eip155:${avalancheFuji.id}` as const;
-
 const root = document.getElementById("checkout")!;
+// La red la decide el servidor (NETWORK); solo se aceptan las dos redes de Sekisho
+const chain = [avalanche, avalancheFuji].find((c) => c.id === Number(root.dataset.chainId)) ?? avalancheFuji;
+const NETWORK = `eip155:${chain.id}` as const;
+
 const orderId = root.dataset.orderId!;
 const payToken = root.dataset.payToken!;
 const amount = root.dataset.amount!;
@@ -69,17 +71,17 @@ button.addEventListener("click", async () => {
   button.disabled = true;
 
   try {
-    const wallet = createWalletClient({ chain: avalancheFuji, transport: custom(window.ethereum) });
+    const wallet = createWalletClient({ chain, transport: custom(window.ethereum) });
 
     setStatus("Conectando tu wallet…");
     const [address] = await wallet.requestAddresses();
 
-    // La firma EIP-712 exige estar en la misma red del dominio (Fuji)
+    // La firma EIP-712 exige estar en la misma red del dominio del USDC
     try {
-      await wallet.switchChain({ id: avalancheFuji.id });
+      await wallet.switchChain({ id: chain.id });
     } catch {
-      await wallet.addChain({ chain: avalancheFuji });
-      await wallet.switchChain({ id: avalancheFuji.id });
+      await wallet.addChain({ chain });
+      await wallet.switchChain({ id: chain.id });
     }
 
     const signer = {
@@ -87,7 +89,7 @@ button.addEventListener("click", async () => {
       signTypedData: (args: any) => wallet.signTypedData({ account: address, ...args }),
     };
 
-    // Solo autoriza USDC de Fuji y nunca más que el total del pedido
+    // Solo autoriza el USDC de la red y nunca más que el total del pedido
     const client = x402Client.fromConfig({
       schemes: [{ network: NETWORK, client: new ExactEvmScheme(signer) }],
       spendControls: {

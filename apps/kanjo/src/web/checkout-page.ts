@@ -56,11 +56,12 @@ export interface CheckoutPageData {
   order: Order;
   items: OrderItem[];
   usdc: string;
+  chainId: number;
   explorer: string;
   payToken: string;
 }
 
-export function renderCheckoutPage({ store, order, items, usdc, explorer, payToken }: CheckoutPageData): string {
+export function renderCheckoutPage({ store, order, items, usdc, chainId, explorer, payToken }: CheckoutPageData): string {
   const rows = items
     .map(
       (i) =>
@@ -92,6 +93,7 @@ export function renderCheckoutPage({ store, order, items, usdc, explorer, payTok
         data-pay-token="${escapeHtml(payToken)}"
         data-amount="${order.total_atomic}"
         data-asset="${usdc}"
+        data-chain-id="${chainId}"
         data-explorer="${explorer}">
       <h1>${escapeHtml(store.name)}</h1>
       <div class="muted">Pedido ${order.id}</div>

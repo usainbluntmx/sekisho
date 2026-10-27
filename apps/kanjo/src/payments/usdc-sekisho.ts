@@ -9,22 +9,20 @@ import {
 } from "@zero-two-labs/sekisho";
 import type { PaymentMethod, PaymentQuote } from "./types.js";
 import type { Order, Store } from "../store.js";
+import { NETWORK, RPC_URL } from "../network.js";
 
 const operatorKey = process.env.OPERATOR_PRIVATE_KEY as `0x${string}` | undefined;
 if (!operatorKey) throw new Error("Falta OPERATOR_PRIVATE_KEY en .env");
 
-/** RPC propia (recomendada en producción). Vacío = RPCs públicas de Fuji con respaldo automático. */
-const RPC_URL = process.env.AVALANCHE_FUJI_RPC_URL || undefined;
-
 /** Wallet operadora: liquida pagos x402 y ejecuta repartos (paga gas en AVAX). */
 export const operator = privateKeyToAccount(operatorKey);
 
-export const sekisho = createSekishoClient({ network: "avalancheFuji", account: operator, rpcUrl: RPC_URL });
+export const sekisho = createSekishoClient({ network: NETWORK, account: operator, rpcUrl: RPC_URL });
 
 /** Facilitator propio (se usa en el checkout). */
 export const facilitator = createSekishoFacilitator({
   account: operator,
-  network: "avalancheFuji",
+  network: NETWORK,
   rpcUrl: RPC_URL,
 });
 
@@ -86,11 +84,8 @@ export const usdcSekisho: PaymentMethod = {
   },
 
   async afterPaid(_order: Order, store: Store): Promise<void> {
-    // Por lotes (por defecto): el distributor reparte cuando conviene
-    if ((process.env.DISTRIBUTE_MODE ?? "batch") !== "each") {
-      console.log("[payments] Reparto programado (por lotes)");
-      return;
-    }
+    // Por lotes (por defecto): el distributor revisa la política tras cada pago y periódicamente
+    if ((process.env.DISTRIBUTE_MODE ?? "batch") !== "each") return;
 
     const hash = await sekisho.distribute(store.merchant_address as Address);
     console.log(`[payments] Reparto ejecutado: ${sekisho.config.explorer}/tx/${hash}`);

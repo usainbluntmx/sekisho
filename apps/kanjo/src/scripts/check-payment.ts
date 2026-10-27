@@ -27,6 +27,7 @@ console.log("Pedido:      ", quote.orderId);
 console.log("Método:      ", `${method.label} (${quote.methodId})`);
 console.log("Total:       ", `${formatUsdc(quote.amountAtomic)} USDC (${quote.amountAtomic} atómico)`);
 console.log("Red:         ", details.option.network);
+console.log("Factory:     ", sekisho.config.factory);
 console.log("payTo:       ", details.vault);
 console.log("Monto x402:  ", details.option.price.amount);
 console.log("Asset:       ", details.option.price.asset);

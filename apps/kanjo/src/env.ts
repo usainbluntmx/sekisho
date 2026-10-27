@@ -25,8 +25,18 @@ required("OPERATOR_PRIVATE_KEY", (v) => /^0x[0-9a-fA-F]{64}$/.test(v), "0x + 64 
 required("ANTHROPIC_API_KEY");
 required("MERCHANT_ADDRESS", (v) => /^0x[0-9a-fA-F]{40}$/.test(v), "dirección 0x de 40 caracteres hexadecimales");
 required("PUBLIC_BASE_URL", (v) => /^https?:\/\/\S+$/.test(v), "URL que empiece con http:// o https://");
-if (env.AVALANCHE_FUJI_RPC_URL && !/^https?:\/\/\S+$/.test(env.AVALANCHE_FUJI_RPC_URL)) {
-  problems.push("AVALANCHE_FUJI_RPC_URL: formato inválido (URL que empiece con http:// o https://)");
+const network = env.NETWORK || "avalancheFuji";
+if (!["avalancheFuji", "avalanche"].includes(network)) {
+  problems.push(`NETWORK: debe ser "avalancheFuji" o "avalanche" (es "${network}")`);
+}
+for (const name of ["AVALANCHE_RPC_URL", "AVALANCHE_FUJI_RPC_URL"]) {
+  const value = env[name];
+  if (value && !/^https?:\/\/\S+$/.test(value)) {
+    problems.push(`${name}: formato inválido (URL que empiece con http:// o https://)`);
+  }
+}
+if (network === "avalanche" && env.AVALANCHE_FUJI_RPC_URL && !env.AVALANCHE_RPC_URL) {
+  console.warn("[kanjo] AVALANCHE_FUJI_RPC_URL se ignora en mainnet; usa AVALANCHE_RPC_URL para una RPC propia.");
 }
 
 const channel = env.NOTIFY_CHANNEL ?? "console";
@@ -48,7 +58,9 @@ if (!["batch", "each"].includes(mode)) {
 positiveNumber("DISTRIBUTE_MIN_USDC");
 positiveNumber("DISTRIBUTE_MAX_HOURS");
 positiveNumber("DISTRIBUTE_AGE_MIN_USDC");
-positiveNumber("DISTRIBUTE_STALE_HOURS");
+if (env.DISTRIBUTE_STALE_HOURS) {
+  console.warn("[kanjo] DISTRIBUTE_STALE_HOURS ya no se usa: nada debajo de DISTRIBUTE_AGE_MIN_USDC se reparte solo.");
+}
 positiveNumber("DISTRIBUTE_FEE_CHANGE_HOURS");
 positiveNumber("DISTRIBUTE_CHECK_MINUTES");
 positiveNumber("HISTORY_HOURS");

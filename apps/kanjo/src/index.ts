@@ -15,6 +15,8 @@ import {
   saveIncoming,
 } from "./inbox.js";
 import { startDistributionScheduler } from "./distributor.js";
+import { NETWORK } from "./network.js";
+import { operator, sekisho } from "./payments/usdc-sekisho.js";
 import { startOutboxWorker } from "./outbox.js";
 import { recoverPaidNotifications } from "./notify.js";
 import { limitBody, rateLimit, safeEqual } from "./security.js";
@@ -143,6 +145,12 @@ for (const msg of pendingMessages) processIncoming(msg);
 const recovered = recoverPaidNotifications();
 if (recovered > 0) console.log(`[outbox] ${recovered} aviso(s) recuperado(s) de pedidos pagados recientes`);
 startOutboxWorker();
+
+// Red y contratos con los que arranca (visible en los logs de Dokploy)
+console.log(
+  `[kanjo] Red: ${NETWORK} (eip155:${sekisho.config.chain.id}) · factory ${sekisho.config.factory} · operador ${operator.address}`
+);
+if (NETWORK === "avalanche") console.warn("[kanjo] MAINNET: los pagos usan USDC real.");
 
 // Reparto por lotes de los vaults
 startDistributionScheduler();

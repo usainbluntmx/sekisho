@@ -1,11 +1,11 @@
-import { NETWORKS } from "@zero-two-labs/sekisho";
+import { NETWORK_CONFIG } from "./network.js";
 import { db } from "./db.js";
 import { getOrder, getStore, type StockShortage } from "./store.js";
 import { formatUsdc } from "./money.js";
 import { enqueueNotification } from "./outbox.js";
 
 const MERCHANT_WA_ID = process.env.MERCHANT_WA_ID ?? "";
-const EXPLORER = NETWORKS.avalancheFuji.explorer;
+const EXPLORER = NETWORK_CONFIG.explorer;
 
 function parseShortages(raw: string | null): StockShortage[] {
   if (!raw) return [];
