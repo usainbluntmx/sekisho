@@ -86,6 +86,17 @@ const RESOLVE_PAY_TO = toFunctionSelector("resolvePayTo(address)");
 const VAULT_OF = toFunctionSelector("vaultOf(address)");
 
 describe("SekishoClient v2", () => {
+  it("enables Avalanche C-Chain mainnet with the v3 factory and Circle USDC", () => {
+    const MAINNET = NETWORKS.avalanche;
+    expect(MAINNET.chain.id).toBe(43114);
+    expect(MAINNET.factory).toBe("0xeB43A8b678E0b4ee7f11bd2867bC8B5EaC9444A6");
+    expect(MAINNET.usdc).toBe("0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E");
+    expect(() => createSekishoClient({ network: "avalanche" })).not.toThrow();
+  });
+
+  it("keeps Fuji as the default network", () => {
+    expect(createSekishoClient().network).toBe("avalancheFuji");
+  });
   it("uses the v3 factory on Fuji", () => {
     expect(FUJI.factory).toBe("0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab");
   });

@@ -89,10 +89,6 @@ describe("configuración de redes", () => {
     expect(FUJI.factory).toBeDefined();
   });
 
-  it("mainnet sin factory desplegada lanza un error claro", () => {
-    expect(() => createSekishoClient({ network: "avalanche" })).toThrow(/no está desplegada/);
-  });
-
   it("escribir sin account lanza un error claro (sin tocar la red)", async () => {
     await expect(createSekishoClient().createVault(VAULT)).rejects.toThrow(/requiere `account`/);
   });

@@ -4,13 +4,26 @@
 
 Sekisho turns any API or MCP tool into a paid endpoint that AI agents can pay for with USDC, using the [x402](https://x402.org) protocol. Every payment lands in the seller's on-chain **SplitVault**, which distributes the platform fee and the seller's share automatically.
 
-> Status: `v0.3.0` — Avalanche Fuji testnet.
+> Status: `v0.4.0` — live on **Avalanche C-Chain mainnet** and Fuji testnet. Contracts are verified, tested and statically analyzed; see [SECURITY.md](https://github.com/usainbluntmx/sekisho/blob/main/SECURITY.md).
 
 ## Install
 
 ```bash
 npm install @zero-two-labs/sekisho viem
 ```
+
+## Networks
+
+| `network` | Chain | Use it for |
+| --- | --- | --- |
+| `"avalancheFuji"` (default) | Avalanche Fuji testnet (`eip155:43113`) | Development and tests, with test USDC |
+| `"avalanche"` | Avalanche C-Chain mainnet (`eip155:43114`) | Real payments in USDC |
+
+```ts
+const sekisho = createSekishoClient({ network: "avalanche" }); // mainnet
+```
+
+The default stays on Fuji so nothing touches real funds unless you ask for mainnet explicitly.
 
 ## How it works
 
@@ -128,7 +141,10 @@ const sekisho = createSekishoClient({
 
 | Network | SplitVaultFactory | USDC |
 | --- | --- | --- |
+| Avalanche C-Chain (`eip155:43114`) | [`0xeB43A8b678E0b4ee7f11bd2867bC8B5EaC9444A6`](https://snowtrace.io/address/0xeB43A8b678E0b4ee7f11bd2867bC8B5EaC9444A6) (v3) | `0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E` |
 | Avalanche Fuji (`eip155:43113`) | [`0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab`](https://testnet.snowtrace.io/address/0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab) (v3) | `0x5425890298aed601595a70AB815c96711a31Bc65` |
+
+On mainnet, the factory owner and the platform treasury are a [Safe](https://safe.global) 2-of-3 multisig (`0xbABB7B7C35438B2Ab646da3C820859062ACEA3Dc`).
 
 Deprecated factories on Fuji: v2 `0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807` (SDK 0.2.x) and v1 `0xA1967201adD1Ac57d1c72D04Ca4d9159B98C8C5D` (SDK ≤ 0.1.5).
 

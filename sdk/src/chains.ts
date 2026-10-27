@@ -35,6 +35,6 @@ export const NETWORKS: Record<SekishoNetwork, NetworkConfig> = {
     explorer: "https://snowtrace.io",
     usdc: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
     usdcEip712: { name: "USD Coin", version: "2" },
-    // factory: se agrega cuando despleguemos en mainnet
+    factory: "0xeB43A8b678E0b4ee7f11bd2867bC8B5EaC9444A6", // SplitVaultFactory v3 (owner: Safe 2/3)
   },
 };

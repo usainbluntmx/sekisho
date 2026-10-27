@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 — 2026-10-27
+
+- **Avalanche C-Chain mainnet** enabled: `network: "avalanche"` uses the SplitVaultFactory v3 at `0xeB43A8b678E0b4ee7f11bd2867bC8B5EaC9444A6` (owner and treasury: Safe 2-of-3) and Circle USDC `0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E`.
+- The default network is still `avalancheFuji`.
+
 ## 0.3.0 — 2026-10-26
 
 **Breaking: uses the SplitVaultFactory v3 on Avalanche Fuji (`0x1fC9C58DfbBDa2d0508b12800859e54f4f3519Ab`).** Vault addresses change again: a seller's v3 `payTo` is different from their v2 vault.

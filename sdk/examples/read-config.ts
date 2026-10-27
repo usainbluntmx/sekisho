@@ -1,9 +1,11 @@
 import { formatUnits } from "viem";
-import { createSekishoClient } from "../src/index.js";
+import { createSekishoClient, type SekishoNetwork } from "../src/index.js";
 
 const MERCHANT = "0xAdc41EBCd5e6cBaC36B688a1c447262A17c56dae";
 
-const sekisho = createSekishoClient({ network: "avalancheFuji" });
+// SEKISHO_NETWORK=avalanche para leer mainnet (por defecto, Fuji)
+const network = (process.env.SEKISHO_NETWORK ?? "avalancheFuji") as SekishoNetwork;
+const sekisho = createSekishoClient({ network });
 
 const config = await sekisho.getConfig();
 console.log("Config:", {
