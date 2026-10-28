@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Café Kanjō · Menú</title>
+  <style>
+    :root { --bg:#faf7f2; --ink:#2b2118; --muted:#7a6a5a; --line:#eadfce; --accent:#b5542d; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: Georgia, "Times New Roman", serif; background:var(--bg); color:var(--ink); }
+    header { text-align:center; padding:40px 16px 12px; }
+    header h1 { margin:0; font-size:36px; letter-spacing:.02em; }
+    header p { margin:6px 0 0; color:var(--muted); font-style:italic; }
+    main { max-width:760px; margin:0 auto; padding:8px 16px 48px; }
+    section { margin-top:28px; }
+    h2 { font-size:15px; text-transform:uppercase; letter-spacing:.14em; color:var(--accent); border-bottom:1px solid var(--line); padding-bottom:6px; }
+    .item { display:flex; justify-content:space-between; gap:16px; padding:10px 0; border-bottom:1px dashed var(--line); }
+    .item h3 { margin:0; font-size:17px; }
+    .item p { margin:2px 0 0; font-size:14px; color:var(--muted); font-family: system-ui, sans-serif; }
+    .price { font-weight:700; white-space:nowrap; font-family: system-ui, sans-serif; }
+    .sold { color:#a33; font-size:12px; font-family: system-ui, sans-serif; }
+    footer { text-align:center; color:var(--muted); font-size:13px; font-family: system-ui, sans-serif; padding:24px 16px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Café Kanjō</h1>
+    <p>Café de especialidad mexicano · Precios en pesos mexicanos (MXN), IVA incluido</p>
+  </header>
+  <main>
+    <section>
+      <h2>Café caliente</h2>
+      <div class="item"><div><h3>Americano 12 oz</h3><p>Café de altura de Chiapas, tueste medio</p></div><span class="price">$45</span></div>
+      <div class="item"><div><h3>Espresso doble</h3><p>Blend de Veracruz y Oaxaca</p></div><span class="price">$40</span></div>
+      <div class="item"><div><h3>Latte 12 oz</h3><p>Espresso doble con leche texturizada</p></div><span class="price">$58</span></div>
+      <div class="item"><div><h3>Latte 16 oz</h3><p>Espresso triple con leche texturizada</p></div><span class="price">$68</span></div>
+      <div class="item"><div><h3>Café de olla</h3><p>Con piloncillo y canela, receta de la casa</p></div><span class="price">$42</span></div>
+      <div class="item"><div><h3>Mocha 12 oz</h3><p>Espresso, chocolate de Tabasco y leche</p></div><span class="price">$65</span></div>
+    </section>
+    <section>
+      <h2>Bebidas frías</h2>
+      <div class="item"><div><h3>Cold brew 16 oz</h3><p>Extracción en frío de 18 horas</p></div><span class="price">$62</span></div>
+      <div class="item"><div><h3>Horchata latte</h3><p>Horchata de arroz con espresso</p></div><span class="price">$70</span></div>
+      <div class="item"><div><h3>Agua de jamaica 500 ml</h3><p>Natural, poco dulce</p></div><span class="price">$35</span></div>
+      <div class="item"><div><h3>Frappé de cajeta</h3><p>Café, cajeta de Celaya y crema batida</p></div><span class="price">$75</span> <span class="sold">Agotado</span></div>
+    </section>
+    <section>
+      <h2>Panadería</h2>
+      <div class="item"><div><h3>Croissant de mantequilla</h3><p>Horneado cada mañana</p></div><span class="price">$38</span></div>
+      <div class="item"><div><h3>Concha de vainilla</h3><p>Pan dulce tradicional</p></div><span class="price">$28</span></div>
+      <div class="item"><div><h3>Rol de canela</h3><p>Con glaseado de queso crema</p></div><span class="price">$45</span></div>
+      <div class="item"><div><h3>Pan de elote</h3><p>Rebanada, receta de la abuela</p></div><span class="price">$40</span></div>
+    </section>
+    <section>
+      <h2>Para llevar a casa</h2>
+      <div class="item"><div><h3>Café en grano 250 g</h3><p>Chiapas, tueste medio, notas de chocolate</p></div><span class="price">$180</span></div>
+      <div class="item"><div><h3>Café en grano 500 g</h3><p>Veracruz, tueste oscuro</p></div><span class="price">$320</span></div>
+    </section>
+  </main>
+  <footer>Menú de demostración de Kanjō (agente de ventas por WhatsApp) · Pagos en USDC con Sekisho</footer>
+</body>
+</html>
