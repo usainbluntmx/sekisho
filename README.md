@@ -16,6 +16,7 @@
 | SDK | [`sdk/`](sdk) | x402 helpers for sellers, paying agents, self-facilitation and paid MCP tools |
 | App | [`apps/kanjo/`](apps/kanjo) | AI sales agent (Claude) + x402 checkout, deployed with Docker |
 | Website | [`apps/web/`](apps/web) | Landing page (Astro) at sekisho.zerotwolabs.xyz |
+| Demo API | [`apps/demo-api/`](apps/demo-api) | Public paid API on mainnet (x402, 0.01 USDC per call) at api.sekisho.zerotwolabs.xyz |
 
 ## How a payment flows
 

@@ -87,12 +87,37 @@ async function main() {
   }
   const explorer = { avalancheFuji: "https://testnet.snowtrace.io", avalanche: "https://snowtrace.io" }[network.name];
   if (explorer) console.log(`\nSnowtrace: ${explorer}/tx/${accept.hash}`);
+
+  // 4) Devolver al funder lo que quedó en las wallets desechables (sus llaves se pierden al terminar)
+  for (const wallet of [a, b]) await refund(wallet, funder.address, usdc);
   if (failures > 0) {
     process.exitCode = 1;
     console.error(`\n❌ ${failures} comprobación(es) fallaron`);
   } else {
     console.log("\n✅ Rotación verificada on-chain");
   }
+}
+
+/** Regresa el USDC y el AVAX sobrante de una wallet desechable (deja solo el gas de las transferencias). */
+async function refund(
+  wallet: { address: string; sendTransaction: (tx: object) => Promise<{ wait: () => Promise<unknown> }> },
+  to: string,
+  usdc: { balanceOf: (a: string) => Promise<bigint>; connect: (w: object) => { transfer: (to: string, v: bigint) => Promise<{ wait: () => Promise<unknown> }> } }
+): Promise<void> {
+  const { ethers } = hre;
+  const usdcLeft: bigint = await usdc.balanceOf(wallet.address);
+  if (usdcLeft > 0n) await (await usdc.connect(wallet).transfer(to, usdcLeft)).wait();
+
+  const fee = await ethers.provider.getFeeData();
+  const maxFeePerGas = (fee.maxFeePerGas ?? fee.gasPrice ?? 0n) * 2n;
+  const balance = await ethers.provider.getBalance(wallet.address);
+  const value = balance - 21_000n * maxFeePerGas;
+  if (value > 0n) {
+    await (
+      await wallet.sendTransaction({ to, value, gasLimit: 21_000n, maxFeePerGas, maxPriorityFeePerGas: fee.maxPriorityFeePerGas ?? 0n })
+    ).wait();
+  }
+  console.log(`↩ Devuelto de ${wallet.address}: ${ethers.formatUnits(usdcLeft, 6)} USDC y ${ethers.formatEther(value > 0n ? value : 0n)} AVAX`);
 }
 
 main().catch((error) => {
