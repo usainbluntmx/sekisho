@@ -7,6 +7,7 @@ A public, paid HTTP API on Avalanche. Each call costs USDC and is paid with [x40
 | `GET /` | free | Service info: network, price, `payTo`, how to pay |
 | `GET /health` | free | `{ "ok": true }` |
 | `GET /v1/avalanche/snapshot` | `PRICE_USDC` (0.01 by default) | Latest block, gas price and the Sekisho factory config |
+| `POST /mcp` | — | MCP server (Streamable HTTP, stateless): tool `ping` (free) and `avalanche_snapshot` (`PRICE_USDC` per call) |
 
 ## Pay from an agent
 
@@ -19,6 +20,20 @@ console.log(await res.json());
 ```
 
 The paying wallet needs USDC on the same network; it only signs (no AVAX needed).
+
+## Pay for an MCP tool
+
+```ts
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { createSekishoMcpClient } from "@zero-two-labs/sekisho";
+
+const client = createSekishoMcpClient({ account, network: "avalanche", maxPerPayment: "0.01", maxPerSession: "0.10" });
+await client.connect(new StreamableHTTPClientTransport(new URL("https://sekisho-api.zerotwolabs.xyz/mcp")));
+const result = await client.callTool("avalanche_snapshot", {});
+console.log(result.content, result.paymentResponse?.transaction);
+```
+
+The client receives the payment requirement from the tool, signs within its limits and retries automatically. Generic MCP hosts without an x402-capable client can list the tools and call `ping`, but can't pay.
 
 ## Run it
 

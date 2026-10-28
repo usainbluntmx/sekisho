@@ -1,6 +1,9 @@
 import { config } from "./config.js";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { serve } from "@hono/node-server";
+import { bodyLimit } from "hono/body-limit";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { formatGwei, formatUnits, nonceManager } from "viem";
@@ -11,10 +14,13 @@ import {
   createSekishoClient,
   createSekishoDistributor,
   createSekishoFacilitator,
+  createSekishoMcpPaywall,
   toFacilitatorClient,
 } from "@zero-two-labs/sekisho";
 
 const PAID_ROUTE = "/v1/avalanche/snapshot";
+const MCP_ROUTE = "/mcp";
+const MCP_TOOL = "avalanche_snapshot";
 const DOCS = "https://github.com/usainbluntmx/sekisho/tree/main/apps/demo-api";
 
 // Operador: liquida y reparte con la misma llave. El nonceManager evita choques de nonce
@@ -50,6 +56,32 @@ resourceServer.onAfterSettle(async (context) => {
 resourceServer.onSettleFailure(async (context) => {
   console.error(`[pago] Falló la liquidación: ${context.error.message}`);
 });
+
+// ───── MCP: la misma consulta como tool de pago (Streamable HTTP, sin sesión) ─────
+const paidTool = await createSekishoMcpPaywall({
+  sekisho,
+  facilitator,
+  merchant: config.merchant,
+  price: config.priceUsdc,
+  distributor,
+  onSettled: ({ toolName, transaction }) =>
+    console.log(`[pago] MCP ${toolName} → ${sekisho.config.explorer}/tx/${transaction}`),
+});
+
+/** Un servidor MCP por petición: en modo sin sesión, así nunca se cruzan ids entre clientes. */
+function buildMcpServer(): McpServer {
+  const server = new McpServer({ name: "sekisho-demo-api", version: SDK_VERSION });
+  server.tool("ping", "Free health check", {}, async () => ({ content: [{ type: "text", text: "pong" }] }));
+  server.tool(
+    MCP_TOOL,
+    `Latest Avalanche block, gas price and Sekisho config. Costs ${config.priceUsdc} USDC (x402 on Avalanche).`,
+    {},
+    paidTool(async () => ({
+      content: [{ type: "text", text: JSON.stringify({ ...(await avalancheSnapshot()), paidTo: option.payTo }) }],
+    }))
+  );
+  return server;
+}
 
 // ───── Límite por IP (en memoria; el servicio corre en una instancia) ─────
 function clientIp(c: Context): string {
@@ -120,6 +152,22 @@ app.get("/health", (c) => c.json({ ok: true }));
 
 app.use("*", rateLimit(config.ratePerMinute));
 
+// MCP antes del paywall HTTP: el cobro de la tool lo hace el wrapper de x402 MCP, no el middleware HTTP.
+// 64 KB bastan para cualquier llamada MCP y cortan bodies enormes antes de validarlos.
+app.all(MCP_ROUTE, bodyLimit({ maxSize: 64 * 1024 }), async (c) => {
+  const server = buildMcpServer();
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  });
+  await server.connect(transport);
+  try {
+    return await transport.handleRequest(c.req.raw);
+  } finally {
+    void server.close();
+  }
+});
+
 app.get("/", (c) =>
   c.json({
     service: "Sekisho demo API",
@@ -130,6 +178,11 @@ app.get("/", (c) =>
     endpoints: {
       free: { "GET /": "this document", "GET /health": "liveness" },
       paid: { [`GET ${PAID_ROUTE}`]: `${config.priceUsdc} USDC — latest Avalanche block, gas price and Sekisho config` },
+      mcp: {
+        url: MCP_ROUTE,
+        transport: "Streamable HTTP (stateless)",
+        tools: { ping: "free", [MCP_TOOL]: `${config.priceUsdc} USDC per call` },
+      },
     },
     payment: {
       scheme: "exact",
@@ -174,6 +227,6 @@ console.log(`[demo-api] Red:       ${config.network} (${option.network})${config
 console.log(`[demo-api] Factory:   ${sekisho.config.factory}`);
 console.log(`[demo-api] Vendedor:  ${config.merchant} → vault ${option.payTo}`);
 console.log(`[demo-api] Operador:  ${operator.address} (liquida y reparte; solo necesita AVAX)`);
-console.log(`[demo-api] Precio:    ${config.priceUsdc} USDC · GET ${PAID_ROUTE}`);
+console.log(`[demo-api] Precio:    ${config.priceUsdc} USDC · GET ${PAID_ROUTE} · MCP ${MCP_ROUTE} (${MCP_TOOL})`);
 console.log(`[demo-api] Puerto:    ${config.port}`);
 console.log("─────────────────────────────────────────────");
