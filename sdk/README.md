@@ -188,6 +188,7 @@ Run them from `sdk/` with a `.env` based on [`.env.example`](.env.example). They
 | `npm run example:agent` | Agent that pays that endpoint and waits for the split |
 | `npm run example:mcp` | Agent that pays an MCP tool (starts `examples/mcp-server.ts`) |
 | `npm run example:keeper` | Standalone distributor for one or many sellers |
+| `npm run example:inspect -- 0xhash …` | Reads transactions on-chain: function, USDC transfers and Sekisho events |
 
 ## RPC
 

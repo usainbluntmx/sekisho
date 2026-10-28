@@ -16,7 +16,7 @@
 | SDK | [`sdk/`](sdk) | x402 helpers for sellers, paying agents, self-facilitation and paid MCP tools |
 | App | [`apps/kanjo/`](apps/kanjo) | AI sales agent (Claude) + x402 checkout, deployed with Docker |
 | Website | [`apps/web/`](apps/web) | Landing page (Astro) at sekisho.zerotwolabs.xyz |
-| Demo API | [`apps/demo-api/`](apps/demo-api) | Public paid API on mainnet (x402, 0.01 USDC per call) at api.sekisho.zerotwolabs.xyz |
+| Demo API | [`apps/demo-api/`](apps/demo-api) | Public paid API on mainnet (x402, 0.01 USDC per call) at [sekisho-api.zerotwolabs.xyz](https://sekisho-api.zerotwolabs.xyz) |
 
 ## How a payment flows
 
@@ -43,6 +43,14 @@ Customer ──chat──▶ Kanjō agent (Claude) ──▶ order + payment lin
 | `SplitVault` (v3 implementation) | [`0x24A48f2cCFaaC60918F81c25B56380A3610F75F5`](https://snowtrace.io/address/0x24A48f2cCFaaC60918F81c25B56380A3610F75F5) |
 | Owner and treasury (Safe 2-of-3) | [`0xbABB7B7C35438B2Ab646da3C820859062ACEA3Dc`](https://snowtrace.io/address/0xbABB7B7C35438B2Ab646da3C820859062ACEA3Dc) |
 | USDC (Circle) | `0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E` |
+
+**First x402 payment on mainnet** (2026-10-28), through the [demo API](apps/demo-api): an agent paid 0.01 USDC for `GET /v1/avalanche/snapshot`, the server settled it into the seller's vault, and the SDK's distributor split it automatically.
+
+| Step | Transaction |
+| --- | --- |
+| Settlement (`transferWithAuthorization`, payer → vault `0xBF15…8e36`) | [`0xadb28eed…91c1`](https://snowtrace.io/tx/0xadb28eeda068a171bd1cd348e3113f479952ea2eab8c4fc9d956b130625591c1) |
+| Vault deployment (`createVault`) | [`0x19bd48d6…1f5a`](https://snowtrace.io/tx/0x19bd48d6a5d6160ca859776d906d1a8c9f8550aa4133eabaa8f8cd6561981f5a) |
+| Split (`distribute`): 0.00985 USDC to the seller, 0.00015 USDC to the Safe | [`0x3d4f388b…612b`](https://snowtrace.io/tx/0x3d4f388b9ec516617713197fdb4355379cc5a90fb88563f558747630ac9e612b) |
 
 **Avalanche Fuji testnet** (`eip155:43113`)
 

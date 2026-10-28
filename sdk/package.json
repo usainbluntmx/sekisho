@@ -14,6 +14,7 @@
     "example:agent": "node --env-file=.env --import tsx examples/agent-pay.ts",
     "example:mcp": "node --env-file=.env --import tsx examples/agent-mcp.ts",
     "example:keeper": "node --env-file=.env --import tsx examples/keeper.ts",
+    "example:inspect": "node --env-file-if-exists=.env --import tsx examples/inspect-tx.ts",
     "typecheck:examples": "tsc --noEmit -p tsconfig.examples.json",
     "prepublishOnly": "npm run build && npm test"
   },

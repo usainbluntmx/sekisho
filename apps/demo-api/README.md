@@ -14,7 +14,7 @@ A public, paid HTTP API on Avalanche. Each call costs USDC and is paid with [x40
 import { createSekishoFetch } from "@zero-two-labs/sekisho";
 
 const { fetch: pay } = createSekishoFetch({ account, network: "avalanche", maxPerPayment: "0.01" });
-const res = await pay("https://api.sekisho.zerotwolabs.xyz/v1/avalanche/snapshot");
+const res = await pay("https://sekisho-api.zerotwolabs.xyz/v1/avalanche/snapshot");
 console.log(await res.json());
 ```
 
