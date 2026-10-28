@@ -1,5 +1,5 @@
 import { decodeEventLog, formatUnits, getAddress, parseAbi, type Hash } from "viem";
-import { createSekishoClient, splitVaultAbi, splitVaultFactoryAbi } from "../src/index.js";
+import { createSekishoClient } from "../src/index.js";
 import { network } from "./env.js";
 
 // Revisa transacciones de Sekisho directo en la cadena (sin depender del explorer):
@@ -11,6 +11,18 @@ const SELECTORS: Record<string, string> = {
   "0x63453ae1": "distribute",
 };
 const transferAbi = parseAbi(["event Transfer(address indexed from, address indexed to, uint256 value)"]);
+// Eventos de los contratos v3 (copiados de backend/contracts)
+const sekishoEventsAbi = parseAbi([
+  "event VaultCreated(address indexed merchant, address indexed vault)",
+  "event MerchantRotated(address indexed vault, address indexed previousMerchant, address indexed newMerchant)",
+  "event TreasuryUpdated(address indexed treasury)",
+  "event FeeUpdated(uint16 feeBps)",
+  "event FeeChangeScheduled(uint16 feeBps, uint64 effectiveAt)",
+  "event FeeChangeCancelled(uint16 feeBps)",
+  "event Distributed(address indexed token, uint256 total, uint256 fee, uint256 merchantAmount)",
+  "event MerchantProposed(address indexed merchant, address indexed proposed)",
+  "event MerchantChanged(address indexed previousMerchant, address indexed newMerchant)",
+]);
 
 const hashes = process.argv.slice(2) as Hash[];
 if (hashes.length === 0) throw new Error("Uso: npm run example:inspect -- 0xhash [0xhash ...]");
@@ -43,17 +55,14 @@ for (const hash of hashes) {
         // No es un Transfer (p. ej. AuthorizationUsed)
       }
     }
-    for (const abi of [splitVaultFactoryAbi, splitVaultAbi]) {
-      try {
-        const event = decodeEventLog({ abi, data: log.data, topics: log.topics });
-        const args = Object.entries(event.args ?? {})
-          .map(([key, value]) => `${key}=${String(value)}`)
-          .join(" ");
-        console.log(`  Evento: ${event.eventName} ${args}`);
-        break;
-      } catch {
-        // Probar con el siguiente ABI
-      }
+    try {
+      const event = decodeEventLog({ abi: sekishoEventsAbi, data: log.data, topics: log.topics });
+      const args = Object.entries(event.args ?? {})
+        .map(([key, value]) => `${key}=${String(value)}`)
+        .join(" ");
+      console.log(`  Evento: ${event.eventName} ${args} (en ${log.address})`);
+    } catch {
+      // Evento de otro contrato (p. ej. Initialized del clon o AuthorizationUsed del USDC)
     }
   }
 }
