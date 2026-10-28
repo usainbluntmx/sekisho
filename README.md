@@ -122,3 +122,12 @@ With a 1.5% fee, the minimum viable ticket is **~$0.30** splitting every order a
 ## License
 
 [MIT](LICENSE) © Zero Two Labs
+
+## Built at Hacktoberfest México 2026
+
+Built on October 28, 2026, during the Hacktoberfest México Build Day, on top of the existing repo:
+
+- **Catalog from any URL with [Firecrawl](https://firecrawl.dev)** (`apps/kanjo/src/catalog-import.ts`): `npm run catalog:import -- <url>` extracts products, prices, sections and photos into a preview with a diff; `npm run catalog:apply -- <id>` writes them. Prices in MXN are converted to USDC. Demo menu: [`/demo/menu.html`](https://sekisho.zerotwolabs.xyz/demo/menu.html).
+- **Voice with [ElevenLabs](https://elevenlabs.io)** (`apps/kanjo/src/voice.ts`): customers talk to the agent from the browser (`/voice`) and it answers out loud; payment links always stay on screen as text. WhatsApp voice notes in and out are wired too (`VOICE_REPLIES=on`).
+
+Everything before these commits already existed: v3 contracts on Avalanche mainnet, the `@zero-two-labs/sekisho` SDK and the x402 checkout with on-chain revenue split. The Kanjō demo runs on Avalanche Fuji testnet.

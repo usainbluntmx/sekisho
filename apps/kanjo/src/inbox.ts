@@ -45,6 +45,16 @@ export function saveIncoming(msg: IncomingMessage): boolean {
   return Number(result.changes) > 0;
 }
 
+/** Texto guardado de un mensaje (la transcripción de un audio se guarda para no repetirla). */
+export function getInboxText(id: string): string | null {
+  const row = db.prepare("SELECT text FROM inbox_messages WHERE id = ?").get(id) as { text: string | null } | undefined;
+  return row?.text ?? null;
+}
+
+export function setInboxText(id: string, text: string): void {
+  db.prepare("UPDATE inbox_messages SET text = ? WHERE id = ?").run(text, id);
+}
+
 /** Cuenta un intento de procesamiento (antes de llamar al agente). */
 export function markStarted(id: string): void {
   db.prepare("UPDATE inbox_messages SET attempts = attempts + 1 WHERE id = ?").run(id);

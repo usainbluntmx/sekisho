@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "npm run test:safety && npm run test:distribution && npm run test:security && npm run test:inbox",
+    "test": "npm run test:safety && npm run test:distribution && npm run test:security && npm run test:inbox && npm run test:catalog",
     "dev": "npm run build:web && node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/index.ts",
     "chat": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/dev-chat.ts",
     "seed": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/seed.ts",
@@ -20,7 +20,11 @@
     "test:distribution": "node --import tsx src/scripts/check-distribution-policy.ts",
     "distribute": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/distribute.ts",
     "test:security": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-security.ts",
-    "test:inbox": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-inbox.ts"
+    "test:inbox": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-inbox.ts",
+    "test:catalog": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-catalog-import.ts",
+    "catalog:import": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/import-catalog.ts",
+    "catalog:apply": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/apply-catalog.ts",
+    "voice:check": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/check-voice.ts"
   },
   "keywords": [],
   "author": "Zero Two Labs",

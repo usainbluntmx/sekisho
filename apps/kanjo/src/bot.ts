@@ -11,12 +11,20 @@ export interface ChatMessage {
   text?: string;
 }
 
-/** Cómo responder: WhatsApp en producción, consola en el chat local. */
-export type Reply = (to: string, text: string) => Promise<void>;
+/**
+ * Cómo responder: WhatsApp en producción, consola en el chat local, JSON en el canal web.
+ * `voice` indica que el cliente habló (mandó audio); cada canal decide si contesta en voz.
+ */
+export type Reply = (to: string, text: string, opts?: { voice?: boolean }) => Promise<void>;
 
 export async function handleMessage(msg: ChatMessage, reply: Reply): Promise<void> {
   if (!msg.text) {
-    return reply(msg.from, "Por ahora solo entiendo mensajes de texto 🙂");
+    return reply(
+      msg.from,
+      msg.type === "audio"
+        ? "No alcancé a escuchar bien tu audio 🙈 ¿Me lo mandas otra vez o me lo escribes?"
+        : "Por ahora entiendo mensajes de texto y audios 🙂"
+    );
   }
 
   upsertCustomer(msg.from, msg.name);
@@ -38,8 +46,9 @@ export async function handleMessage(msg: ChatMessage, reply: Reply): Promise<voi
       customerWaId: msg.from,
       customerName: msg.name,
       text: msg.text,
+      voice: msg.type === "audio",
     });
-    await reply(msg.from, answer);
+    await reply(msg.from, answer, { voice: msg.type === "audio" });
   } catch (error) {
     console.error("[bot] Error del agente:", error);
     await reply(msg.from, "Tuve un problema técnico 😅 ¿Me escribes de nuevo en un momento?");

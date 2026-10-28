@@ -51,6 +51,22 @@ if (env.WHATSAPP_TOKEN && !env.WHATSAPP_APP_SECRET) {
   problems.push("WHATSAPP_APP_SECRET: falta (sin ella el webhook rechaza todos los mensajes)");
 }
 
+// Catálogo desde URL (Firecrawl) y voz (ElevenLabs): apagadas no cambian nada
+for (const name of ["VOICE_REPLIES", "VOICE_WEB"]) {
+  if (env[name] && !["on", "off"].includes(env[name]!)) problems.push(`${name}: debe ser "on" u "off"`);
+}
+if (env.VOICE_REPLIES === "on" || env.VOICE_WEB === "on") {
+  required("ELEVENLABS_API_KEY");
+  required("ELEVENLABS_VOICE_ID");
+}
+if (env.FX_MXN_PER_USDC && !(Number(env.FX_MXN_PER_USDC) > 0)) {
+  problems.push("FX_MXN_PER_USDC: debe ser un número mayor a 0");
+}
+positiveNumber("CATALOG_DEFAULT_STOCK");
+positiveNumber("CATALOG_MAX_ITEMS");
+positiveNumber("VOICE_MAX_CHARS");
+positiveNumber("VOICE_WEB_PER_MINUTE");
+
 const mode = env.DISTRIBUTE_MODE ?? "batch";
 if (!["batch", "each"].includes(mode)) {
   problems.push(`DISTRIBUTE_MODE: debe ser "batch" o "each" (es "${mode}")`);

@@ -7,6 +7,15 @@ const client = new Anthropic(); // lee ANTHROPIC_API_KEY del entorno
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-haiku-5-5";
 const MAX_TOOL_ROUNDS = 6;
 
+/** Reglas extra cuando el cliente habla: la respuesta se va a escuchar, no a leer. */
+const VOICE_RULES = `
+
+El cliente te está hablando por voz y tu respuesta se convertirá en audio:
+- Responde en 1 a 3 frases cortas y naturales, como si hablaras en persona. Nada de listas, viñetas ni saltos de línea.
+- No enumeres más de 3 productos. Si preguntan qué hay, menciona 2 o 3 opciones y di que el menú completo está a la vista.
+- Al resumir un pedido, di cantidades, productos y el total en una sola frase, y pregunta si lo confirma.
+- Al crear el pedido, incluye igual el id del pedido y el payment_url tal cual: el sistema los muestra en pantalla y no los lee en voz.`;
+
 function buildSystemPrompt(store: Store, customerName: string): string {
   return `Eres el asistente de ventas por WhatsApp de "${store.name}". Atiendes a ${customerName || "un cliente"}.
 
@@ -33,6 +42,8 @@ export interface AgentInput {
   customerWaId: string;
   customerName: string;
   text: string;
+  /** El cliente habló (audio): respuesta breve y hablable. */
+  voice?: boolean;
 }
 
 export async function runAgent(input: AgentInput): Promise<string> {
@@ -43,11 +54,12 @@ export async function runAgent(input: AgentInput): Promise<string> {
     { role: "user", content: input.text },
   ];
 
+  let paymentUrl: string | undefined;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 4096,
-      system: buildSystemPrompt(input.store, input.customerName),
+      system: buildSystemPrompt(input.store, input.customerName) + (input.voice ? VOICE_RULES : ""),
       tools: TOOLS,
       messages,
     });
@@ -60,7 +72,11 @@ export async function runAgent(input: AgentInput): Promise<string> {
         .join("\n")
         .trim();
 
-      const finalReply = reply || "¿Me lo puedes repetir, por favor? 🙂";
+      let finalReply = reply || "¿Me lo puedes repetir, por favor? 🙂";
+      // Red de seguridad: si en este turno se creó un pedido, el link de pago siempre llega al cliente
+      if (paymentUrl && !finalReply.includes(paymentUrl)) {
+        finalReply += `\n\nLink de pago: ${paymentUrl}`;
+      }
       saveExchange(input.customerWaId, input.text, finalReply);
       return finalReply;
     }
@@ -72,6 +88,13 @@ export async function runAgent(input: AgentInput): Promise<string> {
     for (const block of response.content) {
       if (block.type !== "tool_use") continue;
       const result = executeTool(block.name, block.input, ctx);
+      if (block.name === "order_create" && !result.isError) {
+        try {
+          paymentUrl = (JSON.parse(result.content) as { payment_url?: string }).payment_url ?? paymentUrl;
+        } catch {
+          // Resultado sin JSON: no hay link que agregar
+        }
+      }
       console.log(`[agent] ${block.name}(${JSON.stringify(block.input)}) → ${result.isError ? "ERROR" : "ok"}`);
       results.push({
         type: "tool_result",

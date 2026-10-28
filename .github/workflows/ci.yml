@@ -66,6 +66,7 @@ jobs:
       - run: npm run test:distribution
       - run: npm run test:security
       - run: npm run test:inbox
+      - run: npm run test:catalog
 
   demo-api:
     name: Demo API

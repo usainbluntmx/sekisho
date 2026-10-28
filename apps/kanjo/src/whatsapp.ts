@@ -11,6 +11,9 @@ export interface IncomingMessage {
   id: string;
   type: string;
   text?: string;
+  /** Media id de Meta cuando el cliente manda un audio o nota de voz. */
+  audioId?: string;
+  audioMime?: string;
 }
 
 /**
@@ -42,6 +45,8 @@ export function parseIncomingMessages(body: any): IncomingMessage[] {
           id: m.id,
           type: m.type,
           text: m.type === "text" ? m.text?.body : undefined,
+          audioId: m.type === "audio" ? m.audio?.id : undefined,
+          audioMime: m.type === "audio" ? m.audio?.mime_type : undefined,
         });
       }
     }

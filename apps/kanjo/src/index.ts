@@ -7,6 +7,8 @@ import { handleMessage } from "./bot.js";
 import { registerCheckout } from "./checkout.js";
 import {
   enqueue,
+  getInboxText,
+  setInboxText,
   markDone,
   markFailed,
   markStarted,
@@ -20,6 +22,9 @@ import { operator, sekisho } from "./payments/usdc-sekisho.js";
 import { startOutboxWorker } from "./outbox.js";
 import { recoverPaidNotifications } from "./notify.js";
 import { limitBody, rateLimit, safeEqual } from "./security.js";
+import { sendWhatsAppVoiceNote, downloadWhatsAppMedia, transcribeAudio, whatsappVoiceEnabled } from "./voice.js";
+import { shouldReplyWithVoice, spokenText } from "./voice-text.js";
+import { registerVoiceWeb, VOICE_API_PATH } from "./voice-web.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
@@ -32,8 +37,9 @@ process.on("unhandledRejection", (reason) => {
 
 const app = new Hono();
 
-// Ningún body por encima de 64 KB llega a parsearse (protege JSON.parse y validaciones con zod)
-app.use("*", limitBody);
+// Ningún body por encima de 64 KB llega a parsearse (protege JSON.parse y validaciones con zod).
+// La excepción es el audio del canal de voz web, que tiene su propio límite.
+app.use("*", (c, next) => (c.req.path === VOICE_API_PATH ? next() : limitBody(c, next)));
 
 app.get("/", (c) => c.json({ service: "Kanjō", status: "ok" }));
 
@@ -48,6 +54,9 @@ app.use("/dev/chat", rateLimit({ max: 20, windowMs: 60_000 }));
 // Checkout web + cobro x402
 registerCheckout(app);
 
+// Canal de voz web (VOICE_WEB=on)
+registerVoiceWeb(app);
+
 // Verificación del webhook (Meta envía un GET al guardar la URL)
 app.get("/webhook", (c) => {
   const mode = c.req.query("hub.mode");
@@ -61,11 +70,46 @@ app.get("/webhook", (c) => {
   return c.text("Forbidden", 403);
 });
 
+/** Texto del mensaje: el propio, o la transcripción del audio (guardada para no repetirla al reintentar). */
+async function textFor(msg: IncomingMessage): Promise<string | undefined> {
+  if (msg.text) return msg.text;
+  if (!msg.audioId) return undefined;
+
+  const cached = getInboxText(msg.id);
+  if (cached) return cached;
+  if (!process.env.ELEVENLABS_API_KEY) return undefined;
+
+  try {
+    const { bytes, mime } = await downloadWhatsAppMedia(msg.audioId);
+    const transcript = await transcribeAudio(bytes, mime || msg.audioMime || "audio/ogg");
+    if (transcript) setInboxText(msg.id, transcript);
+    return transcript ?? undefined;
+  } catch (error) {
+    console.error(`[voice] No se pudo transcribir ${msg.id}:`, (error as Error).message);
+    return undefined;
+  }
+}
+
+/** Respuesta por WhatsApp: nota de voz si el cliente habló y no hay link; si falla, texto. */
+async function sendReply(to: string, text: string, opts?: { voice?: boolean }): Promise<void> {
+  const maxChars = Number(process.env.VOICE_MAX_CHARS ?? 600);
+  if (shouldReplyWithVoice({ enabled: whatsappVoiceEnabled(), inboundType: opts?.voice ? "audio" : "text", text, maxChars })) {
+    try {
+      await sendWhatsAppVoiceNote(to, spokenText(text, maxChars));
+      return;
+    } catch (error) {
+      console.warn(`[voice] Falló la nota de voz, se manda texto: ${(error as Error).message}`);
+    }
+  }
+  await sendText(to, text);
+}
+
 /** Procesa un mensaje del buzón en la cola de su cliente y registra el resultado. */
 function processIncoming(msg: IncomingMessage): void {
   enqueue(msg.from, async () => {
     markStarted(msg.id);
-    await handleMessage(msg, sendText);
+    const text = await textFor(msg);
+    await handleMessage({ ...msg, text }, sendReply);
   })
     .then(() => markDone(msg.id))
     .catch((error) => {
