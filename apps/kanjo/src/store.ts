@@ -15,6 +15,9 @@ export interface Product {
   price_atomic: number;
   stock: number;
   active: number;
+  /** Sección del menú (vacía si no se importó). */
+  category: string;
+  image_url: string | null;
 }
 
 export interface Order {

@@ -72,6 +72,14 @@ function hasColumn(table: string, column: string): boolean {
   return columns.some((c) => c.name === column);
 }
 
+// Catálogo importado: sección del menú y foto del producto (opcionales)
+if (!hasColumn("products", "category")) {
+  db.exec("ALTER TABLE products ADD COLUMN category TEXT NOT NULL DEFAULT ''");
+}
+if (!hasColumn("products", "image_url")) {
+  db.exec("ALTER TABLE products ADD COLUMN image_url TEXT");
+}
+
 // Faltantes de stock detectados al pagar (JSON), o NULL si no hubo
 if (!hasColumn("orders", "stock_issue")) {
   db.exec("ALTER TABLE orders ADD COLUMN stock_issue TEXT");

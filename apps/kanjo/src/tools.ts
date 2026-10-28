@@ -79,6 +79,7 @@ export function executeTool(name: string, input: unknown, ctx: ToolContext): Too
           product_id: p.id,
           name: p.name,
           description: p.description,
+          ...(p.category ? { category: p.category } : {}),
           price_usdc: formatUsdc(p.price_atomic),
           available: p.stock > 0,
           stock: p.stock,
