@@ -64,8 +64,9 @@ const paidTool = await createSekishoMcpPaywall({
   merchant: config.merchant,
   price: config.priceUsdc,
   distributor,
-  onSettled: ({ toolName, transaction }) =>
-    console.log(`[pago] MCP ${toolName} → ${sekisho.config.explorer}/tx/${transaction}`),
+  // x402 MCP no conoce el nombre registrado de la tool (reporta "paid_tool"): se usa el nuestro
+  onSettled: ({ transaction }) =>
+    console.log(`[pago] MCP ${MCP_TOOL} → ${sekisho.config.explorer}/tx/${transaction}`),
 });
 
 /** Un servidor MCP por petición: en modo sin sesión, así nunca se cruzan ids entre clientes. */
