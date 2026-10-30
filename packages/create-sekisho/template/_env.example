@@ -1,0 +1,13 @@
+# avalancheFuji (testnet) o avalanche (mainnet, USDC real)
+NETWORK=avalancheFuji
+# Tu wallet: recibe el 98.5% de cada pago (dueña del SplitVault)
+MERCHANT_ADDRESS=
+# Llave del servidor (0x + 64 hex): liquida pagos y reparte. Solo necesita AVAX para gas.
+OPERATOR_PRIVATE_KEY=
+# Precio por llamada en USDC
+PRICE_USDC=0.01
+PORT=3000
+# Opcional: reparte al juntar este monto (por defecto 5 USDC, o 24 h con ≥ 0.25)
+# DISTRIBUTE_MIN_USDC=5
+# Opcional: wallet que paga en `npm run pay` (necesita USDC de la red)
+# PAYER_PRIVATE_KEY=

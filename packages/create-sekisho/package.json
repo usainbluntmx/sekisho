@@ -1,0 +1,32 @@
+{
+  "name": "@zero-two-labs/create-sekisho",
+  "version": "0.1.0",
+  "description": "Start charging USDC per API call with x402 on Avalanche in 5 minutes (Sekisho)",
+  "type": "module",
+  "bin": {
+    "create-sekisho": "index.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "template",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": ["x402", "avalanche", "usdc", "payments", "ai-agents", "mcp", "create"],
+  "author": "Zero Two Labs",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usainbluntmx/sekisho.git",
+    "directory": "packages/create-sekisho"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

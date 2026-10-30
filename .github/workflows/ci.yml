@@ -87,6 +87,23 @@ jobs:
       - run: npm run build
       - run: npm test
 
+  create:
+    name: create-sekisho
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/create-sekisho
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm test
+      # El proyecto generado instala y compila con las versiones publicadas del SDK
+      - run: node index.mjs "$RUNNER_TEMP/ci-api" --merchant 0x000000000000000000000000000000000000dEaD
+      - run: npm install --no-audit --no-fund && npm run typecheck
+        working-directory: ${{ runner.temp }}/ci-api
+
   web:
     name: Website
     runs-on: ubuntu-latest

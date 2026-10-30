@@ -12,6 +12,12 @@ Sekisho turns any API or MCP tool into a paid endpoint that AI agents can pay fo
 npm install @zero-two-labs/sekisho viem
 ```
 
+Or start from a ready-to-run paid API (server, distributor and operator key included):
+
+```bash
+npm create @zero-two-labs/sekisho my-api -- --merchant 0xYourWallet
+```
+
 ## Networks
 
 | `network` | Chain | Use it for |

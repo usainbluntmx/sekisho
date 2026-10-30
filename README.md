@@ -16,6 +16,7 @@
 | SDK | [`sdk/`](sdk) | x402 helpers for sellers, paying agents, self-facilitation and paid MCP tools |
 | App | [`apps/kanjo/`](apps/kanjo) | AI sales agent (Claude) + x402 checkout, deployed with Docker |
 | Website | [`apps/web/`](apps/web) | Landing page (Astro) at sekisho.zerotwolabs.xyz |
+| Starter | [`packages/create-sekisho/`](packages/create-sekisho) | `npm create @zero-two-labs/sekisho`: a paid API ready to run |
 | Demo API | [`apps/demo-api/`](apps/demo-api) | Public paid API on mainnet (x402, 0.01 USDC per call) at [sekisho-api.zerotwolabs.xyz](https://sekisho-api.zerotwolabs.xyz) |
 
 ## How a payment flows
@@ -80,6 +81,14 @@ Deprecated factories on Fuji: v2 [`0x198F21AF47221bb06dAAf8e4F5eB46F9ba388807`](
 ```bash
 cd backend && npm install && npx hardhat test
 ```
+
+**Start charging in 5 minutes**
+
+```bash
+npm create @zero-two-labs/sekisho my-api -- --merchant 0xYourWallet
+```
+
+A ready-to-run paid API: x402 endpoint, your SplitVault, automatic distributor and a fresh operator key in `.env`. See [`packages/create-sekisho`](packages/create-sekisho).
 
 **SDK**
 
