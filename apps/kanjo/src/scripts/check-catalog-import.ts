@@ -7,6 +7,7 @@ const cleanup = () => {
 };
 cleanup();
 process.env.DB_PATH = TEST_DB;
+process.env.MERCHANT_WA_ID = "5215500000001";
 
 const { normalizeItems, normalizeName, resolveImageUrl, toAtomic } = await import("../catalog-normalize.js");
 const { shouldReplyWithVoice, spokenText } = await import("../voice-text.js");
@@ -29,7 +30,8 @@ function throws(fn: () => unknown, match: RegExp): boolean {
 }
 
 console.log("─── Precios ───");
-check("45 MXN con FX 18.5 → 2.432432 USDC", toAtomic(45, "MXN", 18.5) === 2_432_432);
+check("45 MXN con FX 18.5 → 2.43 USDC (redondeado a centavos)", toAtomic(45, "MXN", 18.5) === 2_430_000);
+check("Precios a centavos: 2 × 45 MXN + 38 MXN suman lo mismo que sus partes", 2 * toAtomic(45, "MXN", 18.5) + toAtomic(38, "MXN", 18.5) === 6_910_000);
 check("2.5 USD → 2500000", toAtomic(2.5, "USD") === 2_500_000);
 check("0.001 USD → rechazado (mínimo 0.01)", throws(() => toAtomic(0.001, "USD"), /0\.01/));
 check("EUR → rechazado (moneda no soportada)", throws(() => toAtomic(45, "EUR"), /no soportada/));
@@ -85,6 +87,25 @@ check("Texto entrante → no responde en voz", !shouldReplyWithVoice({ ...base, 
 check("Respuesta con link → texto", !shouldReplyWithVoice({ ...base, text: "Paga en https://kanjo.example/pay/1" }));
 check("Respuesta larga → texto", !shouldReplyWithVoice({ ...base, maxChars: 10 }));
 check("Función apagada → texto", !shouldReplyWithVoice({ ...base, enabled: false }));
+
+console.log("─── Avisos del canal web ───");
+const store = await import("../store.js");
+const { enqueueOrderPaid } = await import("../notify.js");
+const recipients = (orderId: string) =>
+  (db.prepare("SELECT recipient FROM outbox WHERE dedupe_key LIKE ?").all(`%${orderId}%`) as unknown as { recipient: string }[]).map((r) => r.recipient);
+const productId = listProducts("t")[0].id;
+for (const customer of ["web-abcdefgh12", "5215511112222"]) {
+  store.upsertCustomer(customer, "Cliente");
+  const { order } = store.createOrder("t", customer, [{ productId, quantity: 1 }]);
+  store.markOrderPaid(order.id, `0x${customer.length.toString(16).padStart(64, "0")}`);
+  enqueueOrderPaid(order.id);
+  const to = recipients(order.id);
+  if (customer.startsWith("web-")) {
+    check("Cliente web: solo se avisa a la tienda", to.length === 1 && to[0] === "5215500000001");
+  } else {
+    check("Cliente de WhatsApp: se avisa al cliente y a la tienda", to.length === 2 && to.includes(customer));
+  }
+}
 
 db.close();
 cleanup();

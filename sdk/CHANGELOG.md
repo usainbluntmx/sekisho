@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 — 2026-10-30
+
+- The exported ABIs now include the contract events: `VaultCreated`, `MerchantRotated`, `TreasuryUpdated`, `FeeUpdated`, `FeeChangeScheduled`, `FeeChangeCancelled` (factory), `Distributed`, `MerchantProposed`, `MerchantChanged` (vault) and `Transfer` (`erc20Abi`). Use them with viem's `watchContractEvent`, `getLogs` or `decodeEventLog`.
+- Package metadata in sync with the repo (`example:inspect` script).
+
 ## 0.5.0 — 2026-10-27
 
 Splits now happen without manual work. No breaking changes; contracts are unchanged (v3).

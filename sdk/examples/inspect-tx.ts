@@ -1,5 +1,5 @@
-import { decodeEventLog, formatUnits, getAddress, parseAbi, type Hash } from "viem";
-import { createSekishoClient } from "../src/index.js";
+import { decodeEventLog, formatUnits, getAddress, type Hash } from "viem";
+import { createSekishoClient, erc20Abi, splitVaultAbi, splitVaultFactoryAbi } from "../src/index.js";
 import { network } from "./env.js";
 
 // Revisa transacciones de Sekisho directo en la cadena (sin depender del explorer):
@@ -10,19 +10,8 @@ const SELECTORS: Record<string, string> = {
   "0xb4bd6f46": "createVault",
   "0x63453ae1": "distribute",
 };
-const transferAbi = parseAbi(["event Transfer(address indexed from, address indexed to, uint256 value)"]);
-// Eventos de los contratos v3 (copiados de backend/contracts)
-const sekishoEventsAbi = parseAbi([
-  "event VaultCreated(address indexed merchant, address indexed vault)",
-  "event MerchantRotated(address indexed vault, address indexed previousMerchant, address indexed newMerchant)",
-  "event TreasuryUpdated(address indexed treasury)",
-  "event FeeUpdated(uint16 feeBps)",
-  "event FeeChangeScheduled(uint16 feeBps, uint64 effectiveAt)",
-  "event FeeChangeCancelled(uint16 feeBps)",
-  "event Distributed(address indexed token, uint256 total, uint256 fee, uint256 merchantAmount)",
-  "event MerchantProposed(address indexed merchant, address indexed proposed)",
-  "event MerchantChanged(address indexed previousMerchant, address indexed newMerchant)",
-]);
+// Eventos de los contratos v3 y Transfer de USDC: vienen en los ABI del SDK (desde 0.5.1)
+const sekishoEventsAbi = [...splitVaultFactoryAbi, ...splitVaultAbi];
 
 const hashes = process.argv.slice(2) as Hash[];
 if (hashes.length === 0) throw new Error("Uso: npm run example:inspect -- 0xhash [0xhash ...]");
@@ -48,7 +37,7 @@ for (const hash of hashes) {
   for (const log of receipt.logs) {
     if (getAddress(log.address) === getAddress(usdc)) {
       try {
-        const { args } = decodeEventLog({ abi: transferAbi, data: log.data, topics: log.topics });
+        const { args } = decodeEventLog({ abi: erc20Abi, eventName: "Transfer", data: log.data, topics: log.topics });
         console.log(`  USDC:   ${formatUnits(args.value, 6)} de ${args.from} → ${args.to}`);
         continue;
       } catch {

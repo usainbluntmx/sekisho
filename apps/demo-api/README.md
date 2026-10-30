@@ -21,6 +21,8 @@ console.log(await res.json());
 
 The paying wallet needs USDC on the same network; it only signs (no AVAX needed).
 
+> **The demo is subsidized.** Each call costs the operator about $0.0025 in gas to settle (plus ~$0.002 per split, batched at 1 USDC), while the platform fee on 0.01 USDC is 0.00015 USDC. It exists to show the flow, not as a pricing reference: on Avalanche, a paid call covers its own gas from roughly $0.30 per call, or $0.17 with batched splits.
+
 ## Pay for an MCP tool
 
 ```ts

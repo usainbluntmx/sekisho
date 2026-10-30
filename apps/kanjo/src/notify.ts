@@ -16,6 +16,16 @@ function parseShortages(raw: string | null): StockShortage[] {
   }
 }
 
+/** Clientes del canal web (`web-…`): no tienen WhatsApp; ven la confirmación en la página de pago. */
+export function isWebCustomer(waId: string): boolean {
+  return waId.startsWith("web-");
+}
+
+/** Cómo se muestra el cliente en los avisos a la tienda. */
+function customerLabel(waId: string): string {
+  return isWebCustomer(waId) ? `${customerName(waId)} (canal web)` : `${customerName(waId)} (+${waId})`;
+}
+
 function customerName(waId: string): string {
   const row = db.prepare("SELECT name FROM customers WHERE wa_id = ?").get(waId) as
     | { name: string }
@@ -42,6 +52,7 @@ export function enqueueOrderPaid(orderId: string): number {
       : "";
 
   if (
+    !isWebCustomer(order.customer_wa_id) &&
     enqueueNotification(
       `order-paid:${order.id}:customer`,
       order.customer_wa_id,
@@ -64,7 +75,7 @@ export function enqueueOrderPaid(orderId: string): number {
       enqueueNotification(
         `order-paid:${order.id}:merchant`,
         MERCHANT_WA_ID,
-        `🛒 *Nuevo pedido pagado* · ${order.id}\n\n${lines}\n*Total:* ${total} USDC\n*Cliente:* ${customerName(order.customer_wa_id)} (+${order.customer_wa_id})\n\nComprobante: ${EXPLORER}/tx/${order.payment_tx}${merchantWarning}`
+        `🛒 *Nuevo pedido pagado* · ${order.id}\n\n${lines}\n*Total:* ${total} USDC\n*Cliente:* ${customerLabel(order.customer_wa_id)}\n\nComprobante: ${EXPLORER}/tx/${order.payment_tx}${merchantWarning}`
       )
     ) {
       queued++;
@@ -82,17 +93,19 @@ export function enqueueDuplicatePayment(orderId: string, paymentTx: string, amou
   const { order } = found;
   const amount = formatUsdc(amountAtomic);
 
-  enqueueNotification(
-    `duplicate:${paymentTx}:customer`,
-    order.customer_wa_id,
-    `⚠️ Recibimos un pago adicional de ${amount} USDC para tu pedido *${order.id}*, que ya estaba pagado. La tienda te lo reembolsará.`
-  );
+  if (!isWebCustomer(order.customer_wa_id)) {
+    enqueueNotification(
+      `duplicate:${paymentTx}:customer`,
+      order.customer_wa_id,
+      `⚠️ Recibimos un pago adicional de ${amount} USDC para tu pedido *${order.id}*, que ya estaba pagado. La tienda te lo reembolsará.`
+    );
+  }
 
   if (MERCHANT_WA_ID) {
     enqueueNotification(
       `duplicate:${paymentTx}:merchant`,
       MERCHANT_WA_ID,
-      `⚠️ *Pago duplicado* · ${order.id}\n\nSe recibió otro pago de ${amount} USDC para un pedido ya pagado.\n*Cliente:* ${customerName(order.customer_wa_id)} (+${order.customer_wa_id})\nReembolsa al cliente.\n\nComprobante: ${EXPLORER}/tx/${paymentTx}`
+      `⚠️ *Pago duplicado* · ${order.id}\n\nSe recibió otro pago de ${amount} USDC para un pedido ya pagado.\n*Cliente:* ${customerLabel(order.customer_wa_id)}\nReembolsa al cliente.\n\nComprobante: ${EXPLORER}/tx/${paymentTx}`
     );
   }
 }

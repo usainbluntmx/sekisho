@@ -44,7 +44,7 @@ Customer ──chat──▶ Kanjō agent (Claude) ──▶ order + payment lin
 | Owner and treasury (Safe 2-of-3) | [`0xbABB7B7C35438B2Ab646da3C820859062ACEA3Dc`](https://snowtrace.io/address/0xbABB7B7C35438B2Ab646da3C820859062ACEA3Dc) |
 | USDC (Circle) | `0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E` |
 
-**First x402 payment on mainnet** (2026-10-28), through the [demo API](apps/demo-api): an agent paid 0.01 USDC for `GET /v1/avalanche/snapshot`, the server settled it into the seller's vault, and the SDK's distributor split it automatically.
+**First x402 payment on mainnet** (2026-10-28), through the [demo API](apps/demo-api): an agent paid 0.01 USDC for `GET /v1/avalanche/snapshot`, the server settled it into the seller's vault, and the SDK's distributor split it automatically, 19 seconds later. For this test the demo's split threshold was lowered to 0.01 USDC; in normal operation it batches splits (1 USDC, or 24 h once 0.25 USDC is pending), so later payments wait in the vault until then.
 
 | Step | Transaction |
 | --- | --- |

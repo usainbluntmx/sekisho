@@ -33,7 +33,8 @@ export function toAtomic(price: number, currency: string, fxMxnPerUsdc = Number(
     if (!(fxMxnPerUsdc > 0)) throw new Error("FX_MXN_PER_USDC debe estar definido para precios en MXN");
     usd = price / fxMxnPerUsdc;
   }
-  const atomic = Math.round(usd * 1_000_000);
+  // Redondeo a centavos: así los subtotales que dice el agente suman exactamente el total cobrado
+  const atomic = Math.round(usd * 100) * 10_000;
   if (atomic < MIN_ATOMIC) throw new Error(`Precio por debajo de 0.01 USDC: ${price} ${code}`);
   return atomic;
 }
