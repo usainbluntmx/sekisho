@@ -44,7 +44,7 @@ const SOURCE = `${GITHUB}/blob/main/apps/demo-api/src/metrics.ts`;
         </div>
 
         <div class="stats m-stats">
-          <div class="stat"><span class="stat__value" id="m-payments">—</span><span class="stat__label">Payments</span></div>
+          <div class="stat"><span class="stat__value" id="m-payments">—</span><span class="stat__label" id="m-payments-label">Payments</span></div>
           <div class="stat"><span class="stat__value" id="m-volume">—</span><span class="stat__label">Volume (USDC)</span></div>
           <div class="stat"><span class="stat__value" id="m-payers">—</span><span class="stat__label">Unique payers</span></div>
           <div class="stat"><span class="stat__value" id="m-vaults">—</span><span class="stat__label">Seller vaults</span></div>
@@ -68,9 +68,9 @@ const SOURCE = `${GITHUB}/blob/main/apps/demo-api/src/metrics.ts`;
           <div class="table-box">
             <table class="table">
               <thead>
-                <tr><th scope="col">When (UTC)</th><th scope="col" class="num">USDC</th><th scope="col">Payer</th><th scope="col">Vault</th><th scope="col">Tx</th></tr>
+                <tr><th scope="col">When (UTC)</th><th scope="col" class="num">USDC</th><th scope="col">Type</th><th scope="col">Payer</th><th scope="col">Vault</th><th scope="col">Tx</th></tr>
               </thead>
-              <tbody id="m-recent"><tr><td colspan="5">—</td></tr></tbody>
+              <tbody id="m-recent"><tr><td colspan="6">—</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -92,6 +92,8 @@ const SOURCE = `${GITHUB}/blob/main/apps/demo-api/src/metrics.ts`;
           <p>
             <strong>Payments</strong> are USDC transfers into a SplitVault. A vault counts from the moment it is deployed;
             payments it received before (its address is deterministic) are recovered at that point.{" "}
+            <strong>x402</strong> = settled with <span class="mono">transferWithAuthorization</span> (EIP-3009);{" "}
+            <strong>direct</strong> = any other USDC transfer, such as a manual test.{" "}
             <strong>External</strong> excludes wallets operated by the project for testing:{" "}
             <span id="m-own" class="mono">—</span>.
             Source: <a href={SOURCE}>metrics.ts</a> · Factory <a id="m-factory" class="mono" href="#">—</a> · from block <span id="m-from" class="mono">—</span>.
@@ -151,9 +153,9 @@ const SOURCE = `${GITHUB}/blob/main/apps/demo-api/src/metrics.ts`;
     updatedAt: string | null;
     ownWallets: string[];
     totals: Record<string, number | string>;
-    external: { payments: number; volumeUsdc: string; payers: number };
+    external: { payments: number; x402Payments: number; volumeUsdc: string; payers: number };
     daily: { date: string; payments: number; externalPayments: number }[];
-    recent: { tx: string; at: string; vault: string; payer: string; amountUsdc: string; external: boolean }[];
+    recent: { tx: string; at: string; vault: string; payer: string; amountUsdc: string; external: boolean; kind: "x402" | "direct" }[];
     vaults: { vault: string; merchant: string; payments: number; volumeUsdc: string; pendingUsdc: string }[];
   };
 
@@ -179,9 +181,9 @@ const SOURCE = `${GITHUB}/blob/main/apps/demo-api/src/metrics.ts`;
     td.append(child);
     return td;
   };
-  const emptyRow = (text: string) => {
+  const emptyRow = (text: string, cols: number) => {
     const row = el("tr");
-    row.append(el("td", text, { colspan: "5" }));
+    row.append(el("td", text, { colspan: String(cols) }));
     return row;
   };
 
@@ -191,6 +193,8 @@ const SOURCE = `${GITHUB}/blob/main/apps/demo-api/src/metrics.ts`;
     const t = s.totals;
 
     $("m-payments").textContent = String(t.payments);
+    const direct = Number(t.payments) - Number(t.x402Payments);
+    $("m-payments-label").textContent = `Payments · ${t.x402Payments} via x402${direct ? ` · ${direct} direct` : ""}`;
     $("m-volume").textContent = money(t.volumeUsdc);
     $("m-payers").textContent = String(t.payers);
     $("m-vaults").textContent = String(t.vaults);
@@ -222,7 +226,7 @@ const SOURCE = `${GITHUB}/blob/main/apps/demo-api/src/metrics.ts`;
     // Pagos recientes
     const recent = $("m-recent");
     recent.replaceChildren();
-    if (s.recent.length === 0) recent.append(emptyRow("No payments yet."));
+    if (s.recent.length === 0) recent.append(emptyRow("No payments yet.", 6));
     for (const p of s.recent) {
       const payer = el("td");
       payer.append(link(`address/${p.payer}`, short(p.payer)), el("span", p.external ? "external" : "project", { class: `m-tag${p.external ? " m-tag--ext" : ""}` }));
@@ -230,6 +234,7 @@ const SOURCE = `${GITHUB}/blob/main/apps/demo-api/src/metrics.ts`;
       row.append(
         el("td", p.at.slice(0, 16).replace("T", " ")),
         el("td", money(p.amountUsdc), { class: "num" }),
+        el("td", p.kind, { class: "mono" }),
         payer,
         cell(link(`address/${p.vault}`, short(p.vault))),
         cell(link(`tx/${p.tx}`, short(p.tx)))
@@ -240,7 +245,7 @@ const SOURCE = `${GITHUB}/blob/main/apps/demo-api/src/metrics.ts`;
     // Vaults
     const vaults = $("m-vaults-table");
     vaults.replaceChildren();
-    if (s.vaults.length === 0) vaults.append(emptyRow("No vaults yet."));
+    if (s.vaults.length === 0) vaults.append(emptyRow("No vaults yet.", 5));
     for (const v of s.vaults) {
       const row = el("tr");
       row.append(

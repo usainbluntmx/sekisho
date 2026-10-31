@@ -60,6 +60,6 @@ npm run dev            # http://localhost:3000
 
 ### Metrics
 
-`GET /v1/metrics` is computed from Avalanche event logs only, from the factory's deployment block: `VaultCreated` (factory), USDC `Transfer` into any vault, and `Distributed` (vaults). Nothing is stored: the service re-reads the chain on boot (the response says `"syncing": true` until the first pass ends) and then follows new blocks. A vault is counted once it is deployed; payments it received at its predicted address before that are recovered at that moment.
+`GET /v1/metrics` is computed from Avalanche event logs only, from the factory's deployment block: `VaultCreated` (factory), USDC `Transfer` into any vault, and `Distributed` (vaults). Nothing is stored: the service re-reads the chain on boot (the response says `"syncing": true` until the first pass ends) and then follows new blocks. A vault is counted once it is deployed; payments it received at its predicted address before that are recovered at that moment. Each payment is tagged `x402` (the transaction called USDC's `transferWithAuthorization`, EIP-3009) or `direct` (any other transfer into the vault, such as a manual test).
 
 Docker: `docker build -t sekisho-demo-api .` — the image runs `node dist/index.js` as a non-root user with a `/health` check.

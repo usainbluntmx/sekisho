@@ -23,6 +23,7 @@ const tx = (n: number) => `0x${n.toString(16).padStart(64, "0")}` as Hash;
 
 function fakeChain(opts: { head: bigint; maxRange?: bigint }) {
   const created: VaultCreatedLog[] = [];
+  const direct = new Set<Hash>(); // txs que NO son transferWithAuthorization
   const transfers: TransferLog[] = [];
   const dists: DistributedLog[] = [];
   const calls = { logs: 0, rejected: 0 };
@@ -37,6 +38,7 @@ function fakeChain(opts: { head: bigint; maxRange?: bigint }) {
   const source: MetricsSource = {
     blockNumber: async () => opts.head,
     blockTime: async (block) => NOW - Number(opts.head - block), // 1 s por bloque
+    txSelector: async (hash) => (direct.has(hash) ? "0xa9059cbb" : "0xe3ee160e"),
     vaultsCreated: async (a, b) => (check(a, b), created.filter((v) => inRange(v.block, a, b))),
     transfersTo: async (vaults, a, b) => (check(a, b), transfers.filter((t) => vaults.includes(t.to) && inRange(t.block, a, b))),
     distributions: async (vaults, a, b) => (check(a, b), dists.filter((d) => vaults.includes(d.vault) && inRange(d.block, a, b))),
@@ -46,8 +48,11 @@ function fakeChain(opts: { head: bigint; maxRange?: bigint }) {
     source,
     calls,
     vault: (vault: Address, block: bigint) => created.push({ vault, merchant: MERCHANT, block, tx: tx(++n) }),
-    pay: (to: Address, from: Address, usdc: number, block: bigint) =>
-      transfers.push({ from, to, value: BigInt(usdc * 1e6), block, tx: tx(++n), logIndex: 0 }),
+    pay: (to: Address, from: Address, usdc: number, block: bigint, kind: "x402" | "direct" = "x402") => {
+      const hash = tx(++n);
+      if (kind === "direct") direct.add(hash);
+      transfers.push({ from, to, value: BigInt(usdc * 1e6), block, tx: hash, logIndex: 0 });
+    },
     distribute: (vault: Address, usdc: number, block: bigint) => {
       const total = BigInt(usdc * 1e6);
       const fee = (total * 150n) / 10_000n;
@@ -73,7 +78,7 @@ function indexer(source: MetricsSource, extra: { maxRange?: number } = {}) {
 test("cuenta pagos, repartos, pendiente y separa pagadores externos de los propios", async () => {
   const chain = fakeChain({ head: 1000n });
   chain.vault(VAULT_A, 150n);
-  chain.pay(VAULT_A, OWN, 1, 200n);
+  chain.pay(VAULT_A, OWN, 1, 200n, "direct"); // p. ej. la prueba del deployer con transfer()
   chain.pay(VAULT_A, EXTERNAL, 2, 300n);
   chain.distribute(VAULT_A, 3, 400n);
   chain.pay(VAULT_A, EXTERNAL, 0.5, 500n);
@@ -90,14 +95,18 @@ test("cuenta pagos, repartos, pendiente y separa pagadores externos de los propi
   assert.equal(s.totals.payments, 3);
   assert.equal(s.totals.volumeUsdc, "3.5");
   assert.equal(s.totals.payers, 2);
+  assert.equal(s.totals.x402Payments, 2);
+  assert.equal(s.totals.x402VolumeUsdc, "2.5");
   assert.equal(s.totals.distributions, 1);
   assert.equal(s.totals.distributedUsdc, "3");
   assert.equal(s.totals.feesUsdc, "0.045");
   assert.equal(s.totals.toMerchantsUsdc, "2.955");
   assert.equal(s.totals.pendingUsdc, "0.5");
-  assert.deepEqual(s.external, { payments: 2, volumeUsdc: "2.5", payers: 1 });
+  assert.deepEqual(s.external, { payments: 2, x402Payments: 2, volumeUsdc: "2.5", payers: 1 });
   assert.equal(s.recent[0].amountUsdc, "0.5", "el más reciente primero");
   assert.equal(s.recent.find((p) => p.payer === OWN)?.external, false);
+  assert.equal(s.recent.find((p) => p.payer === OWN)?.kind, "direct");
+  assert.equal(s.recent[0].kind, "x402");
   assert.equal(s.vaults[0].pendingUsdc, "0.5");
   assert.equal(s.daily.length, 30);
   assert.equal(s.daily.at(-1)?.payments, 3);
@@ -178,6 +187,9 @@ test("la fuente real arma bien los filtros de eth_getLogs", async () => {
     transport: custom({
       async request({ method, params }: { method: string; params: any }) {
         requests.push({ method, params });
+        if (method === "eth_getTransactionByHash") {
+          return { hash: params[0], input: "0xE3EE160E0000", from: EXTERNAL, to: USDC, blockNumber: "0x10", type: "0x2", gas: "0x1", nonce: "0x0", value: "0x0" };
+        }
         if (method !== "eth_getLogs") throw new Error(method);
         if (params[0].address === USDC) {
           return [
@@ -220,4 +232,7 @@ test("la fuente real arma bien los filtros de eth_getLogs", async () => {
   await source.vaultsCreated(10n, 20n);
   assert.equal(requests[2].params[0].address, FACTORY);
   assert.equal(requests[2].params[0].topics[0], toEventSelector("VaultCreated(address,address)"));
+
+  assert.equal(await source.txSelector(tx(7)), "0xe3ee160e");
+  assert.equal(requests[3].method, "eth_getTransactionByHash");
 });

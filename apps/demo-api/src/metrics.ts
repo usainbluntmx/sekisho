@@ -1,10 +1,11 @@
-import { formatUnits, getAddress, parseAbiItem, type Address, type Hash, type PublicClient } from "viem";
+import { formatUnits, getAddress, parseAbiItem, type Address, type Hash, type Hex, type PublicClient } from "viem";
 import type { SekishoNetwork } from "@zero-two-labs/sekisho";
 
 /**
  * Métricas públicas de Sekisho leídas directo de la cadena (sin base de datos):
  *   - vaults:   eventos VaultCreated de la factory
- *   - pagos:    transfers de USDC hacia cualquier vault
+ *   - pagos:    transfers de USDC hacia cualquier vault; "x402" si la tx llamó a
+ *               transferWithAuthorization (EIP-3009), "direct" si fue cualquier otra cosa
  *   - repartos: eventos Distributed de los vaults
  * Todo se recalcula desde el bloque de despliegue de la factory al arrancar y luego se
  * actualiza de forma incremental. Un vault cuenta desde que se despliega; en ese momento
@@ -12,6 +13,9 @@ import type { SekishoNetwork } from "@zero-two-labs/sekisho";
  */
 
 /** Bloque de despliegue de SplitVaultFactory v3 (backend/deployments/<red>/SplitVaultFactory.json). */
+/** Selector de transferWithAuthorization (EIP-3009): así liquida x402 `exact`. */
+export const X402_SELECTOR = "0xe3ee160e";
+
 export const FACTORY_DEPLOY_BLOCK: Record<SekishoNetwork, bigint> = {
   avalanche: 98_646_448n,
   avalancheFuji: 60_063_109n,
@@ -46,6 +50,8 @@ export interface MetricsSource {
   blockNumber(): Promise<bigint>;
   /** Timestamp del bloque en segundos. */
   blockTime(block: bigint): Promise<number>;
+  /** Primeros 4 bytes del input de la transacción (la función llamada). */
+  txSelector(tx: Hash): Promise<Hex>;
   vaultsCreated(fromBlock: bigint, toBlock: bigint): Promise<VaultCreatedLog[]>;
   transfersTo(vaults: Address[], fromBlock: bigint, toBlock: bigint): Promise<TransferLog[]>;
   distributions(vaults: Address[], fromBlock: bigint, toBlock: bigint): Promise<DistributedLog[]>;
@@ -63,6 +69,7 @@ export function viemMetricsSource(client: PublicClient, addresses: { factory: Ad
   return {
     blockNumber: () => client.getBlockNumber(),
     blockTime: async (blockNumber) => Number((await client.getBlock({ blockNumber })).timestamp),
+    txSelector: async (hash) => (await client.getTransaction({ hash })).input.slice(0, 10).toLowerCase() as Hex,
     async vaultsCreated(fromBlock, toBlock) {
       const logs = await client.getLogs({ address: factory, event: vaultCreatedEvent, fromBlock, toBlock, strict: true });
       return logs.map((log) => ({
@@ -129,6 +136,8 @@ export interface MetricsOptions {
   log?: (message: string) => void;
 }
 
+export type PaymentKind = "x402" | "direct";
+
 interface Payment {
   tx: Hash;
   vault: Address;
@@ -136,6 +145,7 @@ interface Payment {
   value: bigint;
   block: bigint;
   at: number;
+  kind: PaymentKind;
 }
 interface Distribution {
   tx: Hash;
@@ -162,6 +172,9 @@ export interface MetricsSnapshot {
   totals: {
     payments: number;
     volumeUsdc: string;
+    /** Subconjunto liquidado por x402 (transferWithAuthorization); el resto son transferencias directas. */
+    x402Payments: number;
+    x402VolumeUsdc: string;
     payers: number;
     vaults: number;
     distributions: number;
@@ -170,9 +183,17 @@ export interface MetricsSnapshot {
     feesUsdc: string;
     pendingUsdc: string;
   };
-  external: { payments: number; volumeUsdc: string; payers: number };
+  external: { payments: number; x402Payments: number; volumeUsdc: string; payers: number };
   daily: { date: string; payments: number; externalPayments: number; volumeUsdc: string }[];
-  recent: { tx: Hash; at: string; vault: Address; payer: Address; amountUsdc: string; external: boolean }[];
+  recent: {
+    tx: Hash;
+    at: string;
+    vault: Address;
+    payer: Address;
+    amountUsdc: string;
+    external: boolean;
+    kind: PaymentKind;
+  }[];
   vaults: {
     vault: Address;
     merchant: Address;
@@ -214,6 +235,16 @@ export function createMetricsIndexer(options: MetricsOptions): MetricsIndexer {
   let running: Promise<void> | undefined;
   let timer: NodeJS.Timeout | undefined;
   const blockTimes = new Map<bigint, number>();
+  const selectors = new Map<Hash, PaymentKind>();
+
+  async function kindOf(tx: Hash): Promise<PaymentKind> {
+    let kind = selectors.get(tx);
+    if (kind === undefined) {
+      kind = (await source.txSelector(tx)) === X402_SELECTOR ? "x402" : "direct";
+      selectors.set(tx, kind);
+    }
+    return kind;
+  }
 
   async function timeOf(block: bigint): Promise<number> {
     let at = blockTimes.get(block);
@@ -251,7 +282,15 @@ export function createMetricsIndexer(options: MetricsOptions): MetricsIndexer {
     for (const t of list) {
       const key = `${t.tx}:${t.logIndex}`;
       if (payments.has(key)) continue;
-      payments.set(key, { tx: t.tx, vault: t.to, payer: t.from, value: t.value, block: t.block, at: await timeOf(t.block) });
+      payments.set(key, {
+        tx: t.tx,
+        vault: t.to,
+        payer: t.from,
+        value: t.value,
+        block: t.block,
+        at: await timeOf(t.block),
+        kind: await kindOf(t.tx),
+      });
     }
   }
 
@@ -303,6 +342,7 @@ export function createMetricsIndexer(options: MetricsOptions): MetricsIndexer {
     syncedBlock = head;
     updatedAt = new Date();
     blockTimes.clear();
+    selectors.clear();
   }
 
   function sync(): Promise<void> {
@@ -319,6 +359,7 @@ export function createMetricsIndexer(options: MetricsOptions): MetricsIndexer {
     const sum = (values: bigint[]) => values.reduce((acc, v) => acc + v, 0n);
 
     const external = list.filter((p) => !isOwn(p.payer));
+    const x402 = list.filter((p) => p.kind === "x402");
     const received = new Map<Address, { count: number; value: bigint }>();
     for (const p of list) {
       const entry = received.get(p.vault) ?? { count: 0, value: 0n };
@@ -363,6 +404,8 @@ export function createMetricsIndexer(options: MetricsOptions): MetricsIndexer {
       totals: {
         payments: list.length,
         volumeUsdc: usdc(sum(list.map((p) => p.value))),
+        x402Payments: x402.length,
+        x402VolumeUsdc: usdc(sum(x402.map((p) => p.value))),
         payers: new Set(list.map((p) => p.payer)).size,
         vaults: vaults.size,
         distributions: dists.length,
@@ -373,6 +416,7 @@ export function createMetricsIndexer(options: MetricsOptions): MetricsIndexer {
       },
       external: {
         payments: external.length,
+        x402Payments: external.filter((p) => p.kind === "x402").length,
         volumeUsdc: usdc(sum(external.map((p) => p.value))),
         payers: new Set(external.map((p) => p.payer)).size,
       },
@@ -384,6 +428,7 @@ export function createMetricsIndexer(options: MetricsOptions): MetricsIndexer {
         payer: p.payer,
         amountUsdc: usdc(p.value),
         external: !isOwn(p.payer),
+        kind: p.kind,
       })),
       vaults: [...vaults.entries()]
         .map(([vault, v]) => ({
