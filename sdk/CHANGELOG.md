@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2 — 2026-10-31
+
+Dependency update only; no API changes.
+
+- `@x402/*` 2.29.0, which depends on zod 4.6.6 or later. This clears the high-severity zod advisory [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) (memory exhaustion while validating oversized collections): `npm audit --omit=dev` on the SDK now reports 0 vulnerabilities.
+- `zod` moves to `^4.6.6` (it is used by the MCP example; `@modelcontextprotocol/sdk` accepts zod 3 or 4).
+
 ## 0.5.1 — 2026-10-30
 
 - The exported ABIs now include the contract events: `VaultCreated`, `MerchantRotated`, `TreasuryUpdated`, `FeeUpdated`, `FeeChangeScheduled`, `FeeChangeCancelled` (factory), `Distributed`, `MerchantProposed`, `MerchantChanged` (vault) and `Transfer` (`erc20Abi`). Use them with viem's `watchContractEvent`, `getLogs` or `decodeEventLog`.

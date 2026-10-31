@@ -1,6 +1,6 @@
 {
   "name": "@zero-two-labs/create-sekisho",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Start charging USDC per API call with x402 on Avalanche in 5 minutes (Sekisho)",
   "type": "module",
   "bin": {

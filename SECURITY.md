@@ -37,9 +37,10 @@ Static analysis is not a substitute for a professional audit, which is recommend
 
 ## Known dependency advisories
 
-Production dependencies are audited in CI (`npm audit --omit=dev --audit-level=critical`) for `sdk/`, `apps/kanjo/` and `apps/web/`.
+Production dependencies are audited in CI (`npm audit --omit=dev --audit-level=high`) for `sdk/`, `apps/kanjo/`, `apps/demo-api/` and `apps/web/`; all four report 0 vulnerabilities.
+
+Resolved: [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) (`zod` < 4.6.6, high) came through `@x402/*` 2.28.0. `@x402/*` 2.29.0 requires zod ≥ 4.6.6; the SDK moved to it in 0.5.2.
 
 | Advisory | Where | Exposure | Mitigation / status |
 | --- | --- | --- | --- |
-| [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) — `zod` < 4.6.6 can exhaust memory validating oversized collections (high) | Runtime dependency of `@x402/*` 2.28.0 (latest), the SDK and Kanjō | x402 validates the `PAYMENT-SIGNATURE` header, which Node caps at 16 KB. Kanjō's webhook and dev chat use `JSON.parse`, not zod. | Kanjō rejects any body over 64 KB with 413 before parsing. Waiting for x402 to move to zod ≥ 4.6.6. |
 | `elliptic` (critical, no patched version) and other advisories in the Hardhat 2 toolchain | `backend/` dev dependencies only (via `hardhat-deploy` / ethers v5 and `hardhat-network-helpers` v1) | Only the machine that compiles and deploys. Nothing is deployed from these packages. | The deployer key holds no role on the contracts (on mainnet, owner and treasury are the Safe). Migration to Hardhat 3 is planned after the mainnet launch; the deployed bytecode will be compared to prove the contracts don't change. |
