@@ -1,0 +1,276 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+// Las cifras se leen en el navegador desde la API pública (que a su vez las lee de la cadena)
+const API = "https://sekisho-api.zerotwolabs.xyz/v1/metrics";
+const GITHUB = "https://github.com/usainbluntmx/sekisho";
+const SOURCE = `${GITHUB}/blob/main/apps/demo-api/src/metrics.ts`;
+---
+<Layout
+  title="Sekisho — On-chain metrics"
+  description="Payments, volume, vaults and splits processed by Sekisho on Avalanche, read directly from the chain."
+>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <nav class="container nav__inner" aria-label="Main">
+      <a class="brand" href="/">
+        <span class="seal" aria-hidden="true">関</span>
+        <span>Sekisho</span>
+      </a>
+      <div class="nav__links">
+        <a class="nav__secondary" href="/#developers">Developers</a>
+        <a class="nav__secondary" href="/#trust">Security</a>
+        <a href={GITHUB}>GitHub</a>
+        <a class="btn btn--dark" href={API}>JSON</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main" data-api={API}>
+    <section class="section">
+      <div class="container section__inner">
+        <div class="section-head">
+          <span class="kanji-label" aria-hidden="true">記録</span>
+          <div class="section-head__text">
+            <p class="eyebrow">Live · Avalanche C-Chain</p>
+            <h1 class="h2">On-chain metrics</h1>
+            <p class="lead">
+              Every number on this page is read from Avalanche event logs: vaults created by the factory, USDC transfers
+              into vaults, and splits. No database, no self-reported figures.
+            </p>
+            <p class="m-status" id="m-status" role="status">Loading…</p>
+          </div>
+        </div>
+
+        <div class="stats m-stats">
+          <div class="stat"><span class="stat__value" id="m-payments">—</span><span class="stat__label">Payments</span></div>
+          <div class="stat"><span class="stat__value" id="m-volume">—</span><span class="stat__label">Volume (USDC)</span></div>
+          <div class="stat"><span class="stat__value" id="m-payers">—</span><span class="stat__label">Unique payers</span></div>
+          <div class="stat"><span class="stat__value" id="m-vaults">—</span><span class="stat__label">Seller vaults</span></div>
+          <div class="stat">
+            <span class="stat__value stat__value--accent" id="m-ext-payments">—</span>
+            <span class="stat__label" id="m-ext-label">External payments</span>
+          </div>
+          <div class="stat"><span class="stat__value" id="m-merchants">—</span><span class="stat__label">Paid out to sellers (USDC)</span></div>
+          <div class="stat"><span class="stat__value" id="m-fees">—</span><span class="stat__label">Platform fees (USDC)</span></div>
+          <div class="stat"><span class="stat__value" id="m-pending">—</span><span class="stat__label">Waiting in vaults for the next split (USDC)</span></div>
+        </div>
+
+        <div class="m-block">
+          <h2 class="m-title">Payments per day · last 30 days (UTC)</h2>
+          <div class="m-chart" id="m-chart" role="img" aria-label="Payments per day"></div>
+          <div class="m-legend"><span class="m-key m-key--ext"></span>External <span class="m-key m-key--own"></span>Project wallets</div>
+        </div>
+
+        <div class="m-block">
+          <h2 class="m-title">Recent payments</h2>
+          <div class="table-box">
+            <table class="table">
+              <thead>
+                <tr><th scope="col">When (UTC)</th><th scope="col" class="num">USDC</th><th scope="col">Payer</th><th scope="col">Vault</th><th scope="col">Tx</th></tr>
+              </thead>
+              <tbody id="m-recent"><tr><td colspan="5">—</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="m-block">
+          <h2 class="m-title">Vaults</h2>
+          <div class="table-box">
+            <table class="table">
+              <thead>
+                <tr><th scope="col">Vault</th><th scope="col">Seller</th><th scope="col" class="num">Payments</th><th scope="col" class="num">Volume</th><th scope="col" class="num">Pending</th></tr>
+              </thead>
+              <tbody id="m-vaults-table"><tr><td colspan="5">—</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="m-block m-method">
+          <h2 class="m-title">Method</h2>
+          <p>
+            <strong>Payments</strong> are USDC transfers into a SplitVault. A vault counts from the moment it is deployed;
+            payments it received before (its address is deterministic) are recovered at that point.{" "}
+            <strong>External</strong> excludes wallets operated by the project for testing:{" "}
+            <span id="m-own" class="mono">—</span>.
+            Source: <a href={SOURCE}>metrics.ts</a> · Factory <a id="m-factory" class="mono" href="#">—</a> · from block <span id="m-from" class="mono">—</span>.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__brand">
+        <span class="seal seal--sm" aria-hidden="true">関</span>
+        <span>Sekisho 関所 · by <a href="https://zerotwolabs.xyz">Zero Two Labs</a></span>
+      </div>
+      <div class="footer__meta"><a href="/">Home</a><a href={GITHUB}>GitHub</a></div>
+    </div>
+  </footer>
+</Layout>
+
+<style is:global>
+  /* Global: las barras y filas se crean desde el script (fuera del alcance de los estilos con scope) */
+  .m-status { margin: 0; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  /* .stats y .table-box traen flex-basis pensado para filas; aquí van en columna */
+  .m-stats, .m-block .table-box { flex: none; }
+  .m-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @media (max-width: 860px) { .m-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 640px) { .m-stats .stat__value { font-size: 30px; } }
+  .m-block { display: flex; flex-direction: column; gap: 16px; }
+  .m-title { font-size: 18px; }
+  .m-chart {
+    display: grid; grid-template-columns: repeat(30, 1fr); align-items: end; gap: 3px;
+    height: 160px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--white);
+  }
+  .m-bar { display: flex; flex-direction: column-reverse; height: 100%; min-width: 0; }
+  .m-bar span { display: block; width: 100%; }
+  .m-bar .ext { background: var(--shu); }
+  .m-bar .own { background: var(--line-strong); }
+  .m-legend { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .m-key { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-left: 8px; }
+  .m-key--ext { background: var(--shu); margin-left: 0; }
+  .m-key--own { background: var(--line-strong); }
+  .m-method p { margin: 0; font-size: 15px; line-height: 1.7; color: var(--text-2); max-width: 820px; }
+  .m-tag { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: 6px; }
+  .m-tag--ext { color: var(--shu); }
+  .table td { white-space: nowrap; }
+</style>
+
+<script>
+  type Snapshot = {
+    network: string;
+    factory: string;
+    fromBlock: string;
+    syncedBlock: string | null;
+    headBlock: string | null;
+    syncing: boolean;
+    updatedAt: string | null;
+    ownWallets: string[];
+    totals: Record<string, number | string>;
+    external: { payments: number; volumeUsdc: string; payers: number };
+    daily: { date: string; payments: number; externalPayments: number }[];
+    recent: { tx: string; at: string; vault: string; payer: string; amountUsdc: string; external: boolean }[];
+    vaults: { vault: string; merchant: string; payments: number; volumeUsdc: string; pendingUsdc: string }[];
+  };
+
+  const api = document.querySelector("main")!.dataset.api!;
+  const $ = (id: string) => document.getElementById(id)!;
+  const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+  const money = (v: string | number) => {
+    const n = Number(v);
+    if (n === 0) return "0";
+    if (n < 0.01) return n.toFixed(6).replace(/0+$/, "");
+    return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  };
+
+  function el(tag: string, text?: string, attrs: Record<string, string> = {}): HTMLElement {
+    const node = document.createElement(tag);
+    if (text !== undefined) node.textContent = text;
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    return node;
+  }
+
+  const cell = (child: Node, attrs: Record<string, string> = {}) => {
+    const td = el("td", undefined, attrs);
+    td.append(child);
+    return td;
+  };
+  const emptyRow = (text: string) => {
+    const row = el("tr");
+    row.append(el("td", text, { colspan: "5" }));
+    return row;
+  };
+
+  function render(s: Snapshot) {
+    const explorer = s.network === "avalanche" ? "https://snowtrace.io" : "https://testnet.snowtrace.io";
+    const link = (path: string, text: string) => el("a", text, { href: `${explorer}/${path}`, class: "mono" });
+    const t = s.totals;
+
+    $("m-payments").textContent = String(t.payments);
+    $("m-volume").textContent = money(t.volumeUsdc);
+    $("m-payers").textContent = String(t.payers);
+    $("m-vaults").textContent = String(t.vaults);
+    $("m-ext-payments").textContent = String(s.external.payments);
+    $("m-ext-label").textContent = `External payments · ${s.external.payers} payer${s.external.payers === 1 ? "" : "s"} · ${money(s.external.volumeUsdc)} USDC`;
+    $("m-merchants").textContent = money(t.toMerchantsUsdc);
+    $("m-fees").textContent = money(t.feesUsdc);
+    $("m-pending").textContent = money(t.pendingUsdc);
+
+    const status = s.syncing
+      ? `Indexing the chain… block ${s.syncedBlock ?? s.fromBlock} of ${s.headBlock ?? "?"}. Figures are partial.`
+      : `${s.network === "avalanche" ? "Mainnet" : "Fuji testnet"} · block ${s.syncedBlock} · updated ${new Date(s.updatedAt!).toLocaleTimeString()}`;
+    $("m-status").textContent = status;
+
+    // Gráfica por día
+    const chart = $("m-chart");
+    chart.replaceChildren();
+    const max = Math.max(1, ...s.daily.map((d) => d.payments));
+    for (const d of s.daily) {
+      const bar = el("div", undefined, { class: "m-bar", title: `${d.date}: ${d.payments} payments (${d.externalPayments} external)` });
+      const ext = el("span", undefined, { class: "ext" });
+      ext.style.height = `${(d.externalPayments / max) * 100}%`;
+      const own = el("span", undefined, { class: "own" });
+      own.style.height = `${((d.payments - d.externalPayments) / max) * 100}%`;
+      bar.append(ext, own);
+      chart.append(bar);
+    }
+
+    // Pagos recientes
+    const recent = $("m-recent");
+    recent.replaceChildren();
+    if (s.recent.length === 0) recent.append(emptyRow("No payments yet."));
+    for (const p of s.recent) {
+      const payer = el("td");
+      payer.append(link(`address/${p.payer}`, short(p.payer)), el("span", p.external ? "external" : "project", { class: `m-tag${p.external ? " m-tag--ext" : ""}` }));
+      const row = el("tr");
+      row.append(
+        el("td", p.at.slice(0, 16).replace("T", " ")),
+        el("td", money(p.amountUsdc), { class: "num" }),
+        payer,
+        cell(link(`address/${p.vault}`, short(p.vault))),
+        cell(link(`tx/${p.tx}`, short(p.tx)))
+      );
+      recent.append(row);
+    }
+
+    // Vaults
+    const vaults = $("m-vaults-table");
+    vaults.replaceChildren();
+    if (s.vaults.length === 0) vaults.append(emptyRow("No vaults yet."));
+    for (const v of s.vaults) {
+      const row = el("tr");
+      row.append(
+        cell(link(`address/${v.vault}`, short(v.vault))),
+        cell(link(`address/${v.merchant}`, short(v.merchant))),
+        el("td", String(v.payments), { class: "num" }),
+        el("td", money(v.volumeUsdc), { class: "num" }),
+        el("td", money(v.pendingUsdc), { class: "num" })
+      );
+      vaults.append(row);
+    }
+
+    $("m-own").textContent = s.ownWallets.length ? s.ownWallets.map(short).join(", ") : "none";
+    const factory = $("m-factory") as HTMLAnchorElement;
+    factory.textContent = short(s.factory);
+    factory.href = `${explorer}/address/${s.factory}`;
+    $("m-from").textContent = s.fromBlock;
+  }
+
+  async function load() {
+    try {
+      const res = await fetch(api, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as Snapshot;
+      render(data);
+      setTimeout(load, data.syncing ? 10_000 : 60_000);
+    } catch (error) {
+      $("m-status").textContent = `Could not load metrics (${(error as Error).message}). Retrying…`;
+      setTimeout(load, 30_000);
+    }
+  }
+  load();
+</script>

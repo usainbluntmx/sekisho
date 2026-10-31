@@ -59,6 +59,21 @@ if (env.DISTRIBUTE_FEE_CHANGE_HOURS) {
   distributionPolicy.feeChangeHours = positiveNumber("DISTRIBUTE_FEE_CHANGE_HOURS", 48);
 }
 
+// Métricas on-chain (GET /v1/metrics)
+const metricsEnabled = (env.METRICS || "on") !== "off";
+const ownWallets: Address[] = [];
+for (const raw of (env.METRICS_OWN_WALLETS ?? "").split(",").map((s) => s.trim()).filter(Boolean)) {
+  if (isAddress(raw)) ownWallets.push(getAddress(raw));
+  else problems.push(`METRICS_OWN_WALLETS: "${raw}" no es una dirección válida`);
+}
+let metricsFromBlock: bigint | undefined;
+if (env.METRICS_FROM_BLOCK) {
+  if (/^\d+$/.test(env.METRICS_FROM_BLOCK)) metricsFromBlock = BigInt(env.METRICS_FROM_BLOCK);
+  else problems.push("METRICS_FROM_BLOCK: debe ser un número de bloque");
+}
+const metricsSyncSeconds = positiveNumber("METRICS_SYNC_SECONDS", 60);
+const metricsMaxRange = positiveNumber("METRICS_MAX_RANGE", 2048);
+
 const port = positiveNumber("PORT", 3000);
 const checkMinutes = positiveNumber("DISTRIBUTE_CHECK_MINUTES", 15);
 const ratePerMinute = positiveNumber("RATE_LIMIT_PER_MINUTE", 60);
@@ -80,4 +95,11 @@ export const config = {
   checkMinutes,
   ratePerMinute,
   port,
+  metrics: {
+    enabled: metricsEnabled,
+    ownWallets,
+    fromBlock: metricsFromBlock,
+    syncSeconds: metricsSyncSeconds,
+    maxRange: Math.floor(metricsMaxRange),
+  },
 };

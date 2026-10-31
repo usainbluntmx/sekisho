@@ -6,6 +6,7 @@ A public, paid HTTP API on Avalanche. Each call costs USDC and is paid with [x40
 | --- | --- | --- |
 | `GET /` | free | Service info: network, price, `payTo`, how to pay |
 | `GET /health` | free | `{ "ok": true }` |
+| `GET /v1/metrics` | free | Sekisho-wide on-chain metrics (payments, volume, vaults, splits), CORS open. Feeds [sekisho.zerotwolabs.xyz/metrics](https://sekisho.zerotwolabs.xyz/metrics/) |
 | `GET /v1/avalanche/snapshot` | `PRICE_USDC` (0.01 by default) | Latest block, gas price and the Sekisho factory config |
 | `POST /mcp` | — | MCP server (Streamable HTTP, stateless): tool `ping` (free) and `avalanche_snapshot` (`PRICE_USDC` per call) |
 
@@ -53,5 +54,12 @@ npm run dev            # http://localhost:3000
 | `PRICE_USDC` | Price per call (default `0.01`) |
 | `DISTRIBUTE_*` | Distribution policy (see the SDK README) |
 | `RATE_LIMIT_PER_MINUTE` | Requests per minute per IP (default 60) |
+| `METRICS` | `on` (default) or `off` for `GET /v1/metrics` |
+| `METRICS_OWN_WALLETS` | Comma-separated project wallets (tests); their payments are not counted as external. The demo merchant and operator are added automatically |
+| `METRICS_SYNC_SECONDS` / `METRICS_MAX_RANGE` | Poll interval (60) and blocks per `eth_getLogs` (2048, halved automatically if the RPC refuses) |
+
+### Metrics
+
+`GET /v1/metrics` is computed from Avalanche event logs only, from the factory's deployment block: `VaultCreated` (factory), USDC `Transfer` into any vault, and `Distributed` (vaults). Nothing is stored: the service re-reads the chain on boot (the response says `"syncing": true` until the first pass ends) and then follows new blocks. A vault is counted once it is deployed; payments it received at its predicted address before that are recovered at that moment.
 
 Docker: `docker build -t sekisho-demo-api .` — the image runs `node dist/index.js` as a non-root user with a `/health` check.

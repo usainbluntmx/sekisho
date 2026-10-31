@@ -14,7 +14,7 @@ const VAULT = "0x449d38883418c750DFF8D1a4DF183d6A276789a0" as const;
 const TX = `0x${"cd".repeat(32)}` as const;
 const BASE = "http://demo.test";
 
-function setup(ratePerMinute = 100) {
+function setup(ratePerMinute = 100, metrics?: { snapshot: () => any }) {
   const calls = { verify: 0, settle: 0, distribute: 0 };
   let pendingAtomic = 0n;
   const sekisho = {
@@ -54,6 +54,7 @@ function setup(ratePerMinute = 100) {
     distributionPolicy: { minUsdc: "0.01" },
     snapshot: async () => ({ chainId: 43113, block: { number: "1" } }),
     log: (m) => logs.push(m),
+    metrics,
   });
   const fetchApp = async (input: RequestInfo | URL, init?: RequestInit) => (await ready).app.request(new Request(input, init));
   return { ready, calls, logs, fetchApp };
@@ -162,4 +163,20 @@ test("MCP rechaza bodies de más de 64 KB", async () => {
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping", params: { pad: "x".repeat(70 * 1024) } }),
   });
   assert.equal(res.status, 413);
+});
+
+test("GET /v1/metrics es público, con CORS abierto y caché corta", async () => {
+  const { fetchApp } = setup(100, { snapshot: () => ({ totals: { payments: 3 } }) });
+  const res = await fetchApp(`${BASE}/v1/metrics`, { headers: { origin: "https://sekisho.zerotwolabs.xyz" } });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("access-control-allow-origin"), "*");
+  assert.equal(res.headers.get("cache-control"), "public, max-age=30");
+  assert.deepEqual(await res.json(), { totals: { payments: 3 } });
+  const doc = (await (await fetchApp(`${BASE}/`)).json()) as any;
+  assert.ok(doc.endpoints.free["GET /v1/metrics"]);
+});
+
+test("sin métricas configuradas, /v1/metrics no existe", async () => {
+  const { fetchApp } = setup();
+  assert.equal((await fetchApp(`${BASE}/v1/metrics`)).status, 404);
 });

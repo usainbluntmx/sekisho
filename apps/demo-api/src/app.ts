@@ -1,5 +1,6 @@
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { cors } from "hono/cors";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
@@ -18,6 +19,7 @@ import {
   type SekishoNetwork,
   type SekishoPaymentOption,
 } from "@zero-two-labs/sekisho";
+import type { MetricsIndexer } from "./metrics.js";
 
 export interface DemoAppOptions {
   /** Cliente de Sekisho con `account` (liquida y reparte). */
@@ -32,6 +34,8 @@ export interface DemoAppOptions {
   /** Datos del endpoint de pago; por defecto, el snapshot de la cadena. Los tests lo reemplazan. */
   snapshot?: () => Promise<Record<string, unknown>>;
   log?: (message: string) => void;
+  /** Métricas on-chain para GET /v1/metrics (público y gratis). */
+  metrics?: Pick<MetricsIndexer, "snapshot">;
 }
 
 export interface DemoApp {
@@ -200,7 +204,11 @@ app.get("/", (c) =>
     caip2: option.network,
     sdk: SDK_VERSION,
     endpoints: {
-      free: { "GET /": "this document", "GET /health": "liveness" },
+      free: {
+        "GET /": "this document",
+        "GET /health": "liveness",
+        ...(options.metrics ? { "GET /v1/metrics": "on-chain Sekisho metrics: payments, volume, vaults, splits" } : {}),
+      },
       paid: { [`GET ${PAID_ROUTE}`]: `${config.priceUsdc} USDC — latest Avalanche block, gas price and Sekisho config` },
       mcp: {
         url: MCP_ROUTE,
@@ -227,6 +235,15 @@ app.get("/", (c) =>
     docs: DOCS,
   })
 );
+
+// Métricas públicas: la web las lee desde el navegador (CORS abierto, solo GET, caché de 30 s)
+const metrics = options.metrics;
+if (metrics) {
+  app.get("/v1/metrics", cors({ origin: "*", allowMethods: ["GET"] }), (c) => {
+    c.header("Cache-Control", "public, max-age=30");
+    return c.json(metrics.snapshot());
+  });
+}
 
 app.use(
   paymentMiddleware(
