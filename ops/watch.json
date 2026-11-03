@@ -1,0 +1,39 @@
+{
+  "$comment": "Qué vigila el monitor. Solo direcciones públicas: nunca pongas llaves aquí.",
+  "networks": {
+    "avalanche": {
+      "operators": [
+        { "label": "operador sekisho-api", "address": "0xb4841B636051fE20748E6723a5dB9336b5568732", "minAvax": "0.05" }
+      ],
+      "merchants": [
+        { "label": "sekisho-api", "address": "0xAdc41EBCd5e6cBaC36B688a1c447262A17c56dae", "splitAtUsdc": "1" }
+      ],
+      "admin": {
+        "factory": "0xeB43A8b678E0b4ee7f11bd2867bC8B5EaC9444A6",
+        "safe": "0xbABB7B7C35438B2Ab646da3C820859062ACEA3Dc"
+      }
+    },
+    "avalancheFuji": {
+      "operators": [
+        { "label": "operador Kanjō", "address": "0x0aD57dB2feC0ab359d821Ff1083c6747deD89A61", "minAvax": "0.2" }
+      ],
+      "merchants": [
+        { "label": "Café Kanjō", "address": "0xAdc41EBCd5e6cBaC36B688a1c447262A17c56dae", "splitAtUsdc": "5" }
+      ]
+    }
+  },
+  "endpoints": [
+    { "label": "Sekisho API", "url": "https://sekisho-api.zerotwolabs.xyz/health" },
+    { "label": "Kanjō", "url": "https://kanjo.zerotwolabs.xyz/" },
+    { "label": "Sitio", "url": "https://sekisho.zerotwolabs.xyz/" }
+  ],
+  "metricsUrl": "https://sekisho-api.zerotwolabs.xyz/v1/metrics",
+  "github": "usainbluntmx/sekisho",
+  "rules": {
+    "pendingMaxHours": 26,
+    "pendingAgeMinUsdc": "0.25",
+    "metricsMaxLagBlocks": 900,
+    "adminLookbackBlocks": 100000,
+    "remindEveryHours": 6
+  }
+}

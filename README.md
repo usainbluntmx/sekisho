@@ -17,6 +17,7 @@
 | App | [`apps/kanjo/`](apps/kanjo) | AI sales agent (Claude) + x402 checkout, deployed with Docker |
 | Website | [`apps/web/`](apps/web) | Landing page (Astro) at sekisho.zerotwolabs.xyz |
 | Starter | [`packages/create-sekisho/`](packages/create-sekisho) | `npm create @zero-two-labs/sekisho`: a paid API ready to run |
+| Ops | [`ops/`](ops) | Health check and Telegram alerts for the live deployment |
 | Demo API | [`apps/demo-api/`](apps/demo-api) | Public paid API on mainnet (x402, 0.01 USDC per call) at [sekisho-api.zerotwolabs.xyz](https://sekisho-api.zerotwolabs.xyz), plus free on-chain metrics |
 | Metrics | [`apps/web/src/pages/metrics.astro`](apps/web/src/pages/metrics.astro) | Live payments, volume, vaults and splits read from the chain: [sekisho.zerotwolabs.xyz/metrics](https://sekisho.zerotwolabs.xyz/metrics/) |
 

@@ -1,0 +1,30 @@
+{
+  "name": "sekisho-ops",
+  "version": "0.1.0",
+  "description": "Daily health check and Telegram alerts for Sekisho and Kanj\u014d",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "author": "Zero Two Labs",
+  "scripts": {
+    "check": "node --env-file-if-exists=.env --import tsx src/check.ts",
+    "telegram:chat-id": "node --env-file-if-exists=.env --import tsx src/chat-id.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@zero-two-labs/sekisho": "^0.5.2",
+    "viem": "^2.57.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

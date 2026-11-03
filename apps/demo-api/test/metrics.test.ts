@@ -108,6 +108,7 @@ test("cuenta pagos, repartos, pendiente y separa pagadores externos de los propi
   assert.equal(s.recent.find((p) => p.payer === OWN)?.kind, "direct");
   assert.equal(s.recent[0].kind, "x402");
   assert.equal(s.vaults[0].pendingUsdc, "0.5");
+  assert.equal(s.vaults[0].lastPaymentAt, new Date((NOW - 500) * 1000).toISOString(), "último pago: bloque 500");
   assert.equal(s.daily.length, 30);
   assert.equal(s.daily.at(-1)?.payments, 3);
   assert.equal(s.daily.at(-1)?.externalPayments, 2);

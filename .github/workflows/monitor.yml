@@ -1,0 +1,59 @@
+name: Monitor
+
+# Chequeo fuera de nuestra infraestructura: si el servidor de Dokploy se cae, esto igual avisa.
+# Secrets del repo: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (opcionales: AVALANCHE_RPC_URL, FUJI_RPC_URL).
+on:
+  schedule:
+    - cron: "*/30 * * * *" # cada 30 min: avisa solo lo que cambió
+    - cron: "7 14 * * *" # 14:07 UTC = 08:07 en Ciudad de México: resumen diario
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "notify (solo cambios) o summary (reporte completo)"
+        default: summary
+        type: choice
+        options: [summary, notify]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ops
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ops/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      # El estado (alertas abiertas, último bloque revisado) viaja entre ejecuciones en la caché
+      - uses: actions/cache/restore@v4
+        with:
+          path: ops/.state
+          key: monitor-state-${{ github.run_id }}
+          restore-keys: monitor-state-
+      - name: Chequeo
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          AVALANCHE_RPC_URL: ${{ secrets.AVALANCHE_RPC_URL }}
+          FUJI_RPC_URL: ${{ secrets.FUJI_RPC_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
+          MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || (github.event.schedule == '7 14 * * *' && 'summary' || 'notify') }}
+        run: npm run check -- --$MODE
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ops/.state
+          key: monitor-state-${{ github.run_id }}

@@ -201,6 +201,8 @@ export interface MetricsSnapshot {
     payments: number;
     volumeUsdc: string;
     pendingUsdc: string;
+    /** Último pago recibido (ISO) o null. Lo usa el monitor para detectar repartos atrasados. */
+    lastPaymentAt: string | null;
   }[];
 }
 
@@ -367,6 +369,12 @@ export function createMetricsIndexer(options: MetricsOptions): MetricsIndexer {
       entry.value += p.value;
       received.set(p.vault, entry);
     }
+    const lastPayment = new Map<Address, number>();
+    for (const p of list) lastPayment.set(p.vault, Math.max(lastPayment.get(p.vault) ?? 0, p.at));
+    const lastPaymentOf = (vault: Address) => {
+      const at = lastPayment.get(vault);
+      return at === undefined ? null : new Date(at * 1000).toISOString();
+    };
     const paidOut = new Map<Address, bigint>();
     for (const d of dists) paidOut.set(d.vault, (paidOut.get(d.vault) ?? 0n) + d.total);
     const pendingOf = (vault: Address) => {
@@ -438,6 +446,7 @@ export function createMetricsIndexer(options: MetricsOptions): MetricsIndexer {
           payments: received.get(vault)?.count ?? 0,
           volume: received.get(vault)?.value ?? 0n,
           pendingUsdc: usdc(pendingOf(vault)),
+          lastPaymentAt: lastPaymentOf(vault),
         }))
         .sort((x, y) => (x.volume === y.volume ? 0 : x.volume < y.volume ? 1 : -1))
         .slice(0, 50)
