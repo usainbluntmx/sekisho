@@ -3,7 +3,7 @@
   "networks": {
     "avalanche": {
       "operators": [
-        { "label": "operador sekisho-api", "address": "0xb4841B636051fE20748E6723a5dB9336b5568732", "minAvax": "0.05" }
+        { "label": "operador sekisho-api", "address": "0xb4841B636051fE20748E6723a5dB9336b5568732", "minAvax": "0.03" }
       ],
       "merchants": [
         { "label": "sekisho-api", "address": "0xAdc41EBCd5e6cBaC36B688a1c447262A17c56dae", "splitAtUsdc": "1" }
