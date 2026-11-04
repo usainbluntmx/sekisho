@@ -24,6 +24,10 @@ The paying wallet needs USDC on the same network; it only signs (no AVAX needed)
 
 > **The demo is subsidized.** Each call costs the operator about $0.0025 in gas to settle (plus ~$0.002 per split, batched at 1 USDC), while the platform fee on 0.01 USDC is 0.00015 USDC. It exists to show the flow, not as a pricing reference: on Avalanche, a paid call covers its own gas from roughly $0.30 per call, or $0.17 with batched splits.
 
+## Pay with any x402 client
+
+The endpoint is standard x402 v2, so you don't need the Sekisho SDK: plain `@x402/fetch` and the official Python `x402` client both work (see [`interop/`](../../interop), tested in CI). On Fuji, allow the Fuji USDC asset in your client's spend controls; Avalanche mainnet USDC is allowed by default.
+
 ## Pay for an MCP tool
 
 ```ts

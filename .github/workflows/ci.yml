@@ -104,6 +104,42 @@ jobs:
       - run: npm install --no-audit --no-fund && npm run typecheck
         working-directory: ${{ runner.temp }}/ci-api
 
+  interop:
+    name: Interop (x402 clients)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            apps/demo-api/package-lock.json
+            interop/node/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci --no-audit --no-fund
+        working-directory: apps/demo-api
+      - run: npm ci --no-audit --no-fund
+        working-directory: interop/node
+      - run: pip install -r interop/python/requirements.txt
+      # Demo API real con un facilitador que verifica la firma EIP-3009 (sin cadena ni fondos)
+      - name: Servidor local
+        working-directory: apps/demo-api
+        run: |
+          nohup npm run interop:server > "$RUNNER_TEMP/interop.log" 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:4402/health && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/interop.log"; exit 1
+      - name: Paga con @x402/fetch (sin SDK de Sekisho)
+        working-directory: interop/node
+        run: npm run pay
+      - name: Paga con x402 para Python
+        run: python interop/python/pay.py
+      - name: Log del servidor
+        if: always()
+        run: cat "$RUNNER_TEMP/interop.log"
+
   ops:
     name: Ops
     runs-on: ubuntu-latest

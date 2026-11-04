@@ -1,0 +1,2 @@
+# Cliente x402 oficial para Python (versión fija para que la prueba sea reproducible)
+x402[evm,httpx]==2.26.0

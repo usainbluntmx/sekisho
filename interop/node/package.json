@@ -1,0 +1,29 @@
+{
+  "name": "sekisho-interop-node",
+  "version": "0.1.0",
+  "description": "Pays a Sekisho endpoint with the plain x402 client (@x402/fetch), without the Sekisho SDK",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "pay": "node --env-file-if-exists=.env --import tsx pay.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@x402/core": "^2.29.0",
+    "@x402/evm": "^2.29.0",
+    "@x402/fetch": "^2.29.0",
+    "viem": "^2.57.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

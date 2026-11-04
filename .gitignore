@@ -48,3 +48,6 @@ Thumbs.db
 .idea/
 # Astro
 .astro/
+
+# Entorno de Python de las pruebas de interoperabilidad
+interop/python/.venv/
