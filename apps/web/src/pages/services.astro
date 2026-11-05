@@ -109,7 +109,7 @@ const mcpSnippet = (url: string, price: string) => `{
             </div>
             {s.kind === "mcp" && (
               <p class="svc__note">
-                Put the payer key in <code>~/.config/sekisho/payer.key</code> (<code>chmod 600</code>), never in the config.
+                Put the payer key in <code>~/.config/sekisho/payer.key</code> (<code>chmod 600</code>), never in the config.{" "}
                 <a href="https://github.com/usainbluntmx/sekisho/tree/main/packages/sekisho-mcp">sekisho-mcp</a> enforces the
                 per-call and 24 h caps.
               </p>
@@ -122,7 +122,7 @@ const mcpSnippet = (url: string, price: string) => `{
           <p class="svc__desc">
             Start a paid API with <code>npm create @zero-two-labs/sekisho my-api -- --merchant 0xYourWallet</code>, then open a
             pull request adding it to <a href={`${GITHUB}/blob/main/apps/web/public/services.json`}>services.json</a>. We merge
-            it after checking that it answers a valid x402 <code>402</code> on Avalanche; from then on the monitor checks it
+            it after checking that it answers a valid x402 payment request on Avalanche; from then on the monitor checks it
             every 30 minutes.
           </p>
         </div>
