@@ -2,9 +2,10 @@
 
 A local MCP server that lets **OpenCode, Claude Code, Codex or any MCP client** use paid MCP tools. It connects to a remote MCP server that charges per call with [x402](https://x402.org) (USDC on Avalanche), shows its tools to your agent, and pays the paid ones from your wallet, never above your caps.
 
-- **Per-call cap** (`SEKISHO_MAX_PER_CALL`, default 0.05 USDC): a tool that costs more is refused, nothing is signed.
-- **24-hour cap** (`SEKISHO_MAX_PER_DAY`, default 1 USDC): kept in a file on disk, so it holds across restarts and sessions.
+- **Per-call cap** (`SEKISHO_MAX_PER_CALL`, default 0.01 USDC): a tool that costs more is refused, nothing is signed.
+- **24-hour cap** (`SEKISHO_MAX_PER_DAY`, default 0.10 USDC): kept in a file on disk, so it holds across restarts and sessions.
 - **The key never goes in your editor config.** It is read from a private file (`chmod 600`); the proxy refuses a file other users can read.
+- **Prices in tool descriptions.** After the first call the agent sees what each tool costs (and whether it is above your cap), so it can decide before paying again.
 - Extra free tool `sekisho_wallet`: payer address, network, caps and what was spent in the last 24 h.
 
 Works with any x402 `exact` MCP server on Avalanche, not only Sekisho sellers.
@@ -50,11 +51,11 @@ Other clients: register a local (stdio) MCP server that runs `npx -y @zero-two-l
 | --- | --- | --- |
 | `SEKISHO_MCP_URL` | (required) | Remote paid MCP server (Streamable HTTP). `https`, or `http` on localhost only |
 | `SEKISHO_NETWORK` | `avalancheFuji` | `avalancheFuji` (testnet) or `avalanche` (mainnet, real USDC) |
-| `SEKISHO_MAX_PER_CALL` | `0.05` | Max USDC per tool call |
-| `SEKISHO_MAX_PER_DAY` | `1` | Max USDC in any 24 h window |
+| `SEKISHO_MAX_PER_CALL` | `0.01` | Max USDC per tool call |
+| `SEKISHO_MAX_PER_DAY` | `0.10` | Max USDC in any 24 h window |
 | `SEKISHO_PAYER_KEY_FILE` | `~/.config/sekisho/payer.key` | Private key file (`0x` + 64 hex, mode 600) |
 | `SEKISHO_LEDGER_FILE` | `~/.config/sekisho/spend.json` | Spend log used for the 24 h cap |
 
-A signed payment counts toward the cap even if the server then fails to settle it. Logs go to stderr; stdout is the MCP protocol.
+Agents call paid tools on their own initiative, not only when you ask: keep the caps low. A signed payment counts toward the cap even if the server then fails to settle it. Logs go to stderr; stdout is the MCP protocol.
 
 MIT · [Sekisho](https://sekisho.zerotwolabs.xyz) by Zero Two Labs

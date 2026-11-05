@@ -92,6 +92,10 @@ test("una tool de pago dentro del tope se paga con una firma válida y queda reg
     assert.equal(p.ledger.spentLast24h("eip155:43113"), 10_000n);
     const wallet = await p.call(WALLET_TOOL);
     assert.match(wallet.text, /spent: 0\.01 · left: 0\.99/);
+    const { tools } = await p.client.listTools();
+    const describe = (n: string) => tools.find((t) => t.name === n)?.description ?? "";
+    assert.match(describe("cheap"), /\[Sekisho: costs 0\.01 USDC per call, paid automatically/);
+    assert.match(describe("pricey"), /\[Sekisho: if this tool is paid, it is charged automatically.*up to 0\.05 USDC/);
   } finally {
     await p.close();
     await paid.stop();
@@ -105,6 +109,8 @@ test("si la tool cuesta más que el tope por llamada, no firma y lo dice", async
     const r = await p.call("pricey");
     assert.equal(r.isError, true);
     assert.match(r.text, /cuesta 0\.02 USDC, más que tu tope por llamada \(0\.01\)/);
+    const { tools } = await p.client.listTools();
+    assert.match(tools.find((t) => t.name === "pricey")?.description ?? "", /above the user's cap of 0\.01: calls will be refused/);
     assert.equal(paid.strict.calls.settle, 0);
     assert.equal(p.ledger.spentLast24h("eip155:43113"), 0n);
   } finally {
@@ -152,8 +158,8 @@ test("la llave solo se lee de un archivo privado (600) y con formato válido", (
 test("la configuración valida URL, red y topes, y explica todos los problemas", () => {
   const ok = loadConfig({ SEKISHO_MCP_URL: "https://sekisho-api.zerotwolabs.xyz/mcp", SEKISHO_HOME: "/tmp/x" });
   assert.equal(ok.network, "avalancheFuji");
-  assert.equal(ok.maxPerCall, 50_000n);
-  assert.equal(ok.maxPerDay, 1_000_000n);
+  assert.equal(ok.maxPerCall, 10_000n, "por defecto 0.01 USDC por llamada");
+  assert.equal(ok.maxPerDay, 100_000n, "por defecto 0.10 USDC en 24 h");
   assert.equal(ok.keyFile, "/tmp/x/payer.key");
   assert.throws(
     () => loadConfig({ SEKISHO_MCP_URL: "http://example.com/mcp", SEKISHO_NETWORK: "base", SEKISHO_MAX_PER_CALL: "2", SEKISHO_MAX_PER_DAY: "1" }),

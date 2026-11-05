@@ -38,6 +38,9 @@ export async function createProxy(options: ProxyOptions) {
   // Motivo del último rechazo, para devolverle al agente un error claro
   let denial: string | undefined;
   let currentTool = "";
+  // Precio aprendido de cada tool (del primer 402). Se muestra en su descripción para que el agente lo sepa
+  const prices = new Map<string, bigint>();
+  let pricesChanged = false;
 
   const payment = createSekishoPaymentClient({ account, network: options.network, maxPerPayment: usdc(maxPerCall) });
   const remote = wrapMCPClientWithPayment(new Client({ name: "sekisho-mcp", version: VERSION }), payment, {
@@ -49,6 +52,10 @@ export async function createProxy(options: ProxyOptions) {
         return false;
       }
       const amount = BigInt(option.amount);
+      if (prices.get(toolName) !== amount) {
+        prices.set(toolName, amount);
+        pricesChanged = true;
+      }
       if (amount > maxPerCall) {
         denial = `La tool "${toolName}" cuesta ${usdc(amount)} USDC, más que tu tope por llamada (${usdc(maxPerCall)}). No se pagó.`;
         return false;
@@ -73,11 +80,26 @@ export async function createProxy(options: ProxyOptions) {
     inputSchema: { type: "object", properties: {} },
   };
 
-  const server = new Server({ name: "sekisho-mcp", version: VERSION }, { capabilities: { tools: {} } });
+  const server = new Server({ name: "sekisho-mcp", version: VERSION }, { capabilities: { tools: { listChanged: true } } });
+
+  const priceNote = (name: string) => {
+    const price = prices.get(name);
+    if (price === undefined) return `[Sekisho: if this tool is paid, it is charged automatically from the user's wallet, up to ${usdc(maxPerCall)} USDC per call]`;
+    return price > maxPerCall
+      ? `[Sekisho: costs ${usdc(price)} USDC per call, above the user's cap of ${usdc(maxPerCall)}: calls will be refused]`
+      : `[Sekisho: costs ${usdc(price)} USDC per call, paid automatically from the user's wallet]`;
+  };
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const { tools } = await remote.listTools();
-    return { tools: [...tools.filter((t) => t.name !== WALLET_TOOL), walletTool] };
+    return {
+      tools: [
+        ...tools
+          .filter((t) => t.name !== WALLET_TOOL)
+          .map((t) => ({ ...t, description: `${t.description ?? ""} ${priceNote(t.name)}`.trim() })),
+        walletTool,
+      ],
+    };
   });
 
   // Las llamadas se atienden de una en una: el tope diario se revisa y registra sin carreras
@@ -114,7 +136,15 @@ export async function createProxy(options: ProxyOptions) {
         return { content: [{ type: "text" as const, text }], isError: true };
       }
     };
-    const next = queue.then(run, run);
+    const withNotify = async () => {
+      const result = await run();
+      if (pricesChanged) {
+        pricesChanged = false;
+        await server.sendToolListChanged().catch(() => {}); // el cliente vuelve a pedir la lista con el precio
+      }
+      return result;
+    };
+    const next = queue.then(withNotify, withNotify);
     queue = next.catch(() => {});
     return next as Promise<any>;
   });

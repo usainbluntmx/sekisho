@@ -46,8 +46,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ProxyConfig {
       return 0n;
     }
   };
-  const maxPerCall = amount("SEKISHO_MAX_PER_CALL", "0.05");
-  const maxPerDay = amount("SEKISHO_MAX_PER_DAY", "1");
+  const maxPerCall = amount("SEKISHO_MAX_PER_CALL", "0.01");
+  const maxPerDay = amount("SEKISHO_MAX_PER_DAY", "0.10");
   if (maxPerCall > maxPerDay && maxPerDay > 0n) problems.push("SEKISHO_MAX_PER_CALL no puede ser mayor que SEKISHO_MAX_PER_DAY");
 
   const dir = configDir(env);
