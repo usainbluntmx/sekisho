@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | Contracts | [`backend/`](backend) | `SplitVault` + `SplitVaultFactory` (Solidity, Hardhat, 40 tests) |
 | SDK | [`sdk/`](sdk) | x402 helpers for sellers, paying agents, self-facilitation and paid MCP tools |
-| App | [`apps/kanjo/`](apps/kanjo) | AI sales agent (Claude) + x402 checkout, deployed with Docker |
+| App | [`apps/kanjo/`](apps/kanjo) | AI sales agent (Claude) + x402 checkout, deployed with Docker. See its [README](apps/kanjo/README.md) |
 | Website | [`apps/web/`](apps/web) | Landing page (Astro) at sekisho.zerotwolabs.xyz |
 | Starter | [`packages/create-sekisho/`](packages/create-sekisho) | `npm create @zero-two-labs/sekisho`: a paid API ready to run |
 | Ops | [`ops/`](ops) | Health check and Telegram alerts for the live deployment |
@@ -103,7 +103,7 @@ npm install @zero-two-labs/sekisho viem
 
 See [`sdk/README.md`](sdk/README.md) for seller, agent, facilitator, MCP and distributor (keeper) examples.
 
-**Kanjō** (no WhatsApp account needed for local testing)
+**Kanjō** (no WhatsApp account needed for local testing; full guide in [`apps/kanjo/README.md`](apps/kanjo/README.md))
 
 ```bash
 cd apps/kanjo

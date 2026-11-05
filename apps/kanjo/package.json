@@ -1,7 +1,7 @@
 {
   "name": "kanjo",
   "version": "0.1.0",
-  "description": "",
+  "description": "AI sales agent for small businesses: chats with customers, builds orders and collects USDC through Sekisho",
   "main": "index.js",
   "scripts": {
     "test": "npm run test:safety && npm run test:distribution && npm run test:security && npm run test:inbox && npm run test:catalog",
