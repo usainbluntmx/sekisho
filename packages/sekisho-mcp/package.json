@@ -1,0 +1,60 @@
+{
+  "name": "@zero-two-labs/sekisho-mcp",
+  "version": "0.1.0",
+  "description": "Local MCP proxy that lets Claude Code, Codex, OpenCode and any MCP client pay x402 tools in USDC on Avalanche, with per-call and daily caps",
+  "type": "module",
+  "license": "MIT",
+  "author": "Zero Two Labs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usainbluntmx/sekisho.git",
+    "directory": "packages/sekisho-mcp"
+  },
+  "homepage": "https://sekisho.zerotwolabs.xyz",
+  "keywords": [
+    "mcp",
+    "x402",
+    "avalanche",
+    "usdc",
+    "agents",
+    "opencode",
+    "claude-code",
+    "codex"
+  ],
+  "bin": {
+    "sekisho-mcp": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@x402/mcp": "^2.29.0",
+    "@zero-two-labs/sekisho": "^0.5.2",
+    "viem": "^2.57.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@x402/core": "^2.29.0",
+    "@x402/evm": "^2.29.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

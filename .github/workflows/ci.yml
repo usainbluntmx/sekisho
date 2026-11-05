@@ -104,6 +104,24 @@ jobs:
       - run: npm install --no-audit --no-fund && npm run typecheck
         working-directory: ${{ runner.temp }}/ci-api
 
+  sekisho-mcp:
+    name: sekisho-mcp
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/sekisho-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: packages/sekisho-mcp/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
+
   interop:
     name: Interop (x402 clients)
     runs-on: ubuntu-latest
