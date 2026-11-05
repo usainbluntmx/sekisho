@@ -68,6 +68,15 @@ export function evaluate(facts: Facts, rules: Watch["rules"]): Alert[] {
     });
   }
 
+  for (const s of facts.services) {
+    if (s.problems.length) {
+      alerts.push({
+        key: `service:${s.id}`,
+        text: `El servicio "${s.name}" del directorio no responde lo que promete: ${s.problems.join("; ")}`,
+      });
+    }
+  }
+
   if (facts.ci && facts.ci.status === "completed" && facts.ci.conclusion !== "success") {
     alerts.push({
       key: `ci:${facts.ci.id}`,

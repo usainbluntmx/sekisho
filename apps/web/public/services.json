@@ -1,0 +1,39 @@
+{
+  "$comment": "Directorio de servicios que cobran con Sekisho (x402 en Avalanche). Lo verifica el monitor (ops/) cada 30 min: cada servicio debe responder un 402 con este precio, red, USDC y payTo.",
+  "version": 1,
+  "updated": "2026-11-05",
+  "services": [
+    {
+      "id": "avalanche-snapshot-http",
+      "name": "Avalanche snapshot",
+      "description": "Latest Avalanche C-Chain block, gas price and Sekisho's live contract config (factory, treasury, fee).",
+      "kind": "http",
+      "method": "GET",
+      "url": "https://sekisho-api.zerotwolabs.xyz/v1/avalanche/snapshot",
+      "network": "eip155:43114",
+      "asset": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+      "priceUsdc": "0.01",
+      "payTo": "0xBF15daBBA09b63ee956c06C0234F8992443B8e36",
+      "seller": "0xAdc41EBCd5e6cBaC36B688a1c447262A17c56dae",
+      "provider": { "name": "Zero Two Labs", "url": "https://zerotwolabs.xyz" },
+      "docs": "https://github.com/usainbluntmx/sekisho/tree/main/apps/demo-api",
+      "tags": ["avalanche", "blockchain-data", "demo"]
+    },
+    {
+      "id": "avalanche-snapshot-mcp",
+      "name": "Avalanche snapshot (MCP tool)",
+      "description": "The same snapshot as an MCP tool for agents. Use it from OpenCode, Claude Code or Codex through @zero-two-labs/sekisho-mcp.",
+      "kind": "mcp",
+      "url": "https://sekisho-api.zerotwolabs.xyz/mcp",
+      "tool": "avalanche_snapshot",
+      "network": "eip155:43114",
+      "asset": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+      "priceUsdc": "0.01",
+      "payTo": "0xBF15daBBA09b63ee956c06C0234F8992443B8e36",
+      "seller": "0xAdc41EBCd5e6cBaC36B688a1c447262A17c56dae",
+      "provider": { "name": "Zero Two Labs", "url": "https://zerotwolabs.xyz" },
+      "docs": "https://github.com/usainbluntmx/sekisho/tree/main/packages/sekisho-mcp",
+      "tags": ["avalanche", "blockchain-data", "mcp", "demo"]
+    }
+  ]
+}

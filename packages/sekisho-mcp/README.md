@@ -8,7 +8,7 @@ A local MCP server that lets **OpenCode, Claude Code, Codex or any MCP client** 
 - **Prices in tool descriptions.** After the first call the agent sees what each tool costs (and whether it is above your cap), so it can decide before paying again.
 - Extra free tool `sekisho_wallet`: payer address, network, caps and what was spent in the last 24 h.
 
-Works with any x402 `exact` MCP server on Avalanche, not only Sekisho sellers.
+Works with any x402 `exact` MCP server on Avalanche, not only Sekisho sellers. Paid services you can use with it are listed at [sekisho.zerotwolabs.xyz/services](https://sekisho.zerotwolabs.xyz/services/). Listed in the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.usainbluntmx/sekisho-mcp`.
 
 ## 1. The payer key
 

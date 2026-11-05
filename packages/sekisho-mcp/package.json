@@ -1,6 +1,7 @@
 {
   "name": "@zero-two-labs/sekisho-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
+  "mcpName": "io.github.usainbluntmx/sekisho-mcp",
   "description": "Local MCP proxy that lets Claude Code, Codex, OpenCode and any MCP client pay x402 tools in USDC on Avalanche, with per-call and daily caps",
   "type": "module",
   "license": "MIT",

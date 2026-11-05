@@ -43,6 +43,10 @@ export function formatReport(facts: Facts, alerts: Alert[]): string {
     lines.push(`  ${e.ok ? "✅" : "⚠️"} ${e.label}: ${e.status ? `HTTP ${e.status}` : (e.error ?? "sin respuesta")}${e.ms !== undefined ? ` · ${e.ms} ms` : ""}`);
   }
 
+  lines.push("", "Directorio de servicios (402 verificado sin pagar)");
+  if (facts.services.length === 0) lines.push("  (sin datos)");
+  for (const s of facts.services) lines.push(`  ${s.problems.length ? "⚠️" : "✅"} ${s.name}${s.problems.length ? `: ${s.problems.join("; ")}` : ""}`);
+
   lines.push("", "Contratos (eventos de administración)");
   if (facts.admin.length === 0) {
     const scanned = Object.entries(facts.adminScannedTo).map(([net, block]) => `${NET_LABEL[net as keyof typeof NET_LABEL]} hasta el bloque ${block}`);

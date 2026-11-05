@@ -1,6 +1,12 @@
 import { getAddress, parseEther, parseUnits, toEventSelector, type Address, type Hash, type PublicClient } from "viem";
 import { createSekishoClient } from "@zero-two-labs/sekisho";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { probeService, validateDirectory, type Directory } from "./services.js";
 import type { Facts, Net, Watch } from "./types.js";
+
+const OPS_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Eventos que indican un cambio de administración. Se comparan por topic0 (sirve para Safe 1.3 y 1.4). */
 const ADMIN_EVENTS: Record<"factory" | "safe", string[]> = {
@@ -81,6 +87,7 @@ export async function collect(
     endpoints: [],
     admin: [],
     adminScannedTo: {},
+    services: [],
     errors: [],
   };
   const fail = (key: string, text: string, error: unknown) =>
@@ -188,6 +195,22 @@ export async function collect(
     } catch (error) {
       facts.endpoints.push({ label: e.label, url: e.url, ok: false, error: (error as Error).message.split("\n")[0] });
     }
+  }
+
+  // Directorio: cada servicio listado se pide sin pagar y debe responder lo que promete
+  try {
+    const directory = JSON.parse(readFileSync(resolve(OPS_ROOT, watch.servicesFile), "utf8")) as Directory;
+    const invalid = validateDirectory(directory);
+    if (invalid.length) facts.errors.push({ key: "services:file", text: `el directorio de servicios: ${invalid.join("; ")}` });
+    for (const service of directory.services) {
+      try {
+        facts.services.push({ id: service.id, name: service.name, problems: await probeService(service) });
+      } catch (error) {
+        facts.services.push({ id: service.id, name: service.name, problems: [(error as Error).message.split("\n")[0]] });
+      }
+    }
+  } catch (error) {
+    fail("services", "el directorio de servicios", error);
   }
 
   try {

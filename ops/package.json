@@ -1,7 +1,7 @@
 {
   "name": "sekisho-ops",
   "version": "0.1.0",
-  "description": "Daily health check and Telegram alerts for Sekisho and Kanj\u014d",
+  "description": "Daily health check and Telegram alerts for Sekisho and Kanjō",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -13,6 +13,9 @@
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@x402/core": "^2.30.0",
+    "@x402/mcp": "^2.30.0",
     "@zero-two-labs/sekisho": "^0.5.2",
     "viem": "^2.57.7"
   },

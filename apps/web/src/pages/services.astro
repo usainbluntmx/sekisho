@@ -1,0 +1,164 @@
+---
+import Layout from "../layouts/Layout.astro";
+import directory from "../../public/services.json";
+
+// El directorio sale de public/services.json (también servido en /services.json para agentes).
+// El monitor (ops/) verifica cada 30 min que cada servicio responda el 402 que aquí se promete.
+const GITHUB = "https://github.com/usainbluntmx/sekisho";
+const EXPLORER = { "eip155:43114": "https://snowtrace.io", "eip155:43113": "https://testnet.snowtrace.io" } as const;
+const NETWORK = { "eip155:43114": "Avalanche mainnet", "eip155:43113": "Avalanche Fuji" } as const;
+const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+
+const httpSnippet = (url: string) => `import { x402Client } from "@x402/core/client";
+import { ExactEvmScheme } from "@x402/evm/exact/client";
+import { wrapFetchWithPayment } from "@x402/fetch";
+import { privateKeyToAccount } from "viem/accounts";
+
+const account = privateKeyToAccount(process.env.PAYER_PRIVATE_KEY);
+const client = x402Client.fromConfig({
+  schemes: [{ network: "eip155:43114", client: new ExactEvmScheme(account) }],
+});
+const pay = wrapFetchWithPayment(fetch, client);
+const res = await pay("${url}");
+console.log(await res.json());`;
+
+const mcpSnippet = (url: string, price: string) => `{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "sekisho": {
+      "type": "local",
+      "command": ["npx", "-y", "@zero-two-labs/sekisho-mcp"],
+      "environment": {
+        "SEKISHO_MCP_URL": "${url}",
+        "SEKISHO_NETWORK": "avalanche",
+        "SEKISHO_MAX_PER_CALL": "${price}",
+        "SEKISHO_MAX_PER_DAY": "0.10"
+      },
+      "timeout": 60000
+    }
+  }
+}`;
+---
+<Layout
+  title="Sekisho — Services"
+  description="Paid APIs and MCP tools that charge with Sekisho: x402 payments in USDC on Avalanche, verified every 30 minutes."
+>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <nav class="container nav__inner" aria-label="Main">
+      <a class="brand" href="/">
+        <span class="seal" aria-hidden="true">関</span>
+        <span>Sekisho</span>
+      </a>
+      <div class="nav__links">
+        <a class="nav__secondary" href="/metrics/">Metrics</a>
+        <a class="nav__secondary" href="/#developers">Developers</a>
+        <a href={GITHUB}>GitHub</a>
+        <a class="btn btn--dark" href="/services.json">JSON</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="section">
+      <div class="container section__inner">
+        <div class="section-head">
+          <span class="kanji-label" aria-hidden="true">目録</span>
+          <div class="section-head__text">
+            <p class="eyebrow">Directory · {directory.services.length} services</p>
+            <h1 class="h2">What agents can buy with Sekisho</h1>
+            <p class="lead">
+              Every service here is paid per call with x402 in USDC, and the money lands in the seller's SplitVault.
+              Our monitor requests each one every 30 minutes, without paying, and checks that it still asks for the price,
+              network and vault listed here. Machine-readable at <a href="/services.json">/services.json</a>.
+            </p>
+          </div>
+        </div>
+
+        {directory.services.map((s) => (
+          <article class="svc" id={s.id}>
+            <div class="svc__head">
+              <div>
+                <h2 class="svc__name">{s.name}</h2>
+                <p class="svc__desc">{s.description}</p>
+              </div>
+              <div class="svc__price">
+                <span class="svc__amount">{s.priceUsdc}</span>
+                <span class="svc__unit">USDC / call</span>
+              </div>
+            </div>
+
+            <dl class="svc__facts">
+              <div><dt>Type</dt><dd>{s.kind === "mcp" ? `MCP tool · ${s.tool}` : `HTTP ${s.method ?? "GET"}`}</dd></div>
+              <div><dt>Endpoint</dt><dd class="mono">{s.url}</dd></div>
+              <div><dt>Network</dt><dd>{NETWORK[s.network as keyof typeof NETWORK]}</dd></div>
+              <div>
+                <dt>Pays to (vault)</dt>
+                <dd><a class="mono" href={`${EXPLORER[s.network as keyof typeof EXPLORER]}/address/${s.payTo}`}>{short(s.payTo)}</a></dd>
+              </div>
+              <div><dt>Provider</dt><dd><a href={s.provider.url}>{s.provider.name}</a> · <a href={s.docs}>docs</a></dd></div>
+            </dl>
+
+            <div class="code-window">
+              <div class="code-window__bar">
+                <span>{s.kind === "mcp" ? "opencode.json" : "pay.ts"}</span>
+                <span>{s.kind === "mcp" ? "OpenCode · any MCP client" : "Any x402 client"}</span>
+              </div>
+              <pre><code>{s.kind === "mcp" ? mcpSnippet(s.url, s.priceUsdc) : httpSnippet(s.url)}</code></pre>
+            </div>
+            {s.kind === "mcp" && (
+              <p class="svc__note">
+                Put the payer key in <code>~/.config/sekisho/payer.key</code> (<code>chmod 600</code>), never in the config.
+                <a href="https://github.com/usainbluntmx/sekisho/tree/main/packages/sekisho-mcp">sekisho-mcp</a> enforces the
+                per-call and 24 h caps.
+              </p>
+            )}
+          </article>
+        ))}
+
+        <div class="svc svc--cta">
+          <h2 class="svc__name">List your service</h2>
+          <p class="svc__desc">
+            Start a paid API with <code>npm create @zero-two-labs/sekisho my-api -- --merchant 0xYourWallet</code>, then open a
+            pull request adding it to <a href={`${GITHUB}/blob/main/apps/web/public/services.json`}>services.json</a>. We merge
+            it after checking that it answers a valid x402 <code>402</code> on Avalanche; from then on the monitor checks it
+            every 30 minutes.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__brand">
+        <span class="seal seal--sm" aria-hidden="true">関</span>
+        <span>Sekisho 関所 · by <a href="https://zerotwolabs.xyz">Zero Two Labs</a></span>
+      </div>
+      <div class="footer__meta"><a href="/">Home</a><a href="/metrics/">Metrics</a><a href={GITHUB}>GitHub</a></div>
+    </div>
+  </footer>
+</Layout>
+
+<style>
+  .svc { flex: none; display: flex; flex-direction: column; gap: 20px; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--white); }
+  .svc__head { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+  .svc__name { margin: 0; font-size: 22px; }
+  .svc__desc { margin: 8px 0 0; color: var(--text-2); line-height: 1.6; max-width: 720px; }
+  .svc__price { display: flex; flex-direction: column; align-items: flex-end; flex: none; }
+  .svc__amount { font-size: 32px; font-weight: 700; color: var(--shu); line-height: 1; }
+  .svc__unit { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .svc__facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 24px; margin: 0; }
+  .svc__facts dt { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .svc__facts dd { margin: 4px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+  .svc__note { margin: 0; font-size: 14px; color: var(--text-2); line-height: 1.6; }
+  .svc--cta { background: transparent; border-style: dashed; }
+  .svc code { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+  .svc .code-window pre { font-size: 13px; }
+  @media (max-width: 640px) {
+    .svc { padding: 20px; }
+    .svc__head { flex-direction: column; }
+    .svc__price { align-items: flex-start; }
+  }
+</style>

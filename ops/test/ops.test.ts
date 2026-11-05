@@ -46,6 +46,7 @@ function healthy(): Facts {
     },
     admin: [],
     adminScannedTo: { avalanche: 1010n },
+    services: [{ id: "avalanche-snapshot-http", name: "Avalanche snapshot", problems: [] }],
     ci: { id: 49, status: "completed", conclusion: "success", title: "chore", sha: "4bf541e00", url: "https://ci" },
     errors: [],
   };
@@ -64,6 +65,7 @@ test("cada regla genera su alerta con clave estable", () => {
   f.admin.push({ network: "avalanche", contract: "safe", event: "ExecutionSuccess", tx: TX, block: 999n });
   f.ci = { ...f.ci!, conclusion: "failure" };
   f.errors.push({ key: "metrics", text: "las métricas: HTTP 500" });
+  f.services[0].problems.push("precio 20000 atómico ≠ 10000 (0.01 USDC)");
 
   const keys = evaluate(f, rules).map((a) => a.key);
   assert.deepEqual(keys, [
@@ -72,6 +74,7 @@ test("cada regla genera su alerta con clave estable", () => {
     `split:avalancheFuji:${MERCHANT.toLowerCase()}`,
     "metrics:lag",
     `admin:${TX}:ExecutionSuccess`,
+    "service:avalanche-snapshot-http",
     "ci:49",
     "error:metrics",
   ]);

@@ -18,6 +18,8 @@ export interface Watch {
   >;
   endpoints: { label: string; url: string }[];
   metricsUrl: string;
+  /** Directorio publicado en el sitio (ruta relativa a ops/). */
+  servicesFile: string;
   github: string;
   rules: {
     pendingMaxHours: number;
@@ -55,6 +57,8 @@ export interface Facts {
   admin: { network: Net; contract: "factory" | "safe"; event: string; tx: Hash; block: bigint }[];
   /** Último bloque revisado por red para eventos de administración (se guarda en el estado). */
   adminScannedTo: Partial<Record<Net, bigint>>;
+  /** Cada servicio del directorio, pedido sin pagar: debe responder el 402 prometido. */
+  services: { id: string; name: string; problems: string[] }[];
   ci?: { id: number; status: string; conclusion: string | null; title: string; sha: string; url: string };
   errors: { key: string; text: string }[];
 }

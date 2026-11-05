@@ -1,0 +1,63 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.usainbluntmx/sekisho-mcp",
+  "title": "Sekisho MCP",
+  "description": "Lets any MCP client pay x402 tools in USDC on Avalanche, with per-call and 24 h caps.",
+  "repository": {
+    "url": "https://github.com/usainbluntmx/sekisho",
+    "source": "github",
+    "subfolder": "packages/sekisho-mcp"
+  },
+  "websiteUrl": "https://sekisho.zerotwolabs.xyz/services/",
+  "version": "0.1.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@zero-two-labs/sekisho-mcp",
+      "version": "0.1.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SEKISHO_MCP_URL",
+          "description": "Remote paid MCP server (Streamable HTTP), e.g. https://sekisho-api.zerotwolabs.xyz/mcp",
+          "isRequired": true,
+          "format": "string"
+        },
+        {
+          "name": "SEKISHO_NETWORK",
+          "description": "avalancheFuji (testnet) or avalanche (mainnet, real USDC)",
+          "isRequired": false,
+          "format": "string",
+          "default": "avalancheFuji",
+          "choices": [
+            "avalancheFuji",
+            "avalanche"
+          ]
+        },
+        {
+          "name": "SEKISHO_MAX_PER_CALL",
+          "description": "Max USDC per tool call",
+          "isRequired": false,
+          "format": "string",
+          "default": "0.01"
+        },
+        {
+          "name": "SEKISHO_MAX_PER_DAY",
+          "description": "Max USDC in any 24 h window",
+          "isRequired": false,
+          "format": "string",
+          "default": "0.10"
+        },
+        {
+          "name": "SEKISHO_PAYER_KEY_FILE",
+          "description": "Path to the payer private key file (mode 600). Never put the key itself in config.",
+          "isRequired": false,
+          "format": "filepath",
+          "default": "~/.config/sekisho/payer.key"
+        }
+      ]
+    }
+  ]
+}

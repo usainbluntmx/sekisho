@@ -18,6 +18,7 @@ What it watches is in [`watch.json`](watch.json) (public addresses, minimum bala
 | Overdue split | Pending ≥ the merchant's `splitAtUsdc`, or ≥ 0.25 USDC with the last payment more than 26 h ago |
 | Metrics stalled | The indexer is more than 900 blocks behind the chain |
 | Admin event | Fee, treasury or ownership change on the factory; any executed transaction or owner change on the Safe |
+| Service broken | A service in [`services.json`](../apps/web/public/services.json) no longer answers a `402` with the listed price, network, USDC and vault (checked without paying) |
 | CI failed | The last `CI` run on `main` did not succeed |
 
 ## Telegram

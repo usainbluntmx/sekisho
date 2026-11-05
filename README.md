@@ -22,6 +22,7 @@
 | Interop | [`interop/`](interop) | Pays a Sekisho endpoint with plain `@x402/fetch` and the official Python x402 client, in CI |
 | Demo API | [`apps/demo-api/`](apps/demo-api) | Public paid API on mainnet (x402, 0.01 USDC per call) at [sekisho-api.zerotwolabs.xyz](https://sekisho-api.zerotwolabs.xyz), plus free on-chain metrics |
 | Metrics | [`apps/web/src/pages/metrics.astro`](apps/web/src/pages/metrics.astro) | Live payments, volume, vaults and splits read from the chain: [sekisho.zerotwolabs.xyz/metrics](https://sekisho.zerotwolabs.xyz/metrics/) |
+| Services | [`apps/web/public/services.json`](apps/web/public/services.json) | Directory of paid APIs and MCP tools that charge with Sekisho, verified every 30 min: [sekisho.zerotwolabs.xyz/services](https://sekisho.zerotwolabs.xyz/services/) |
 
 ## How a payment flows
 

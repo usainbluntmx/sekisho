@@ -28,6 +28,7 @@
     { "label": "Sitio", "url": "https://sekisho.zerotwolabs.xyz/" }
   ],
   "metricsUrl": "https://sekisho-api.zerotwolabs.xyz/v1/metrics",
+  "servicesFile": "../apps/web/public/services.json",
   "github": "usainbluntmx/sekisho",
   "rules": {
     "pendingMaxHours": 26,
