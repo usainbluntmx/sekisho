@@ -31,6 +31,7 @@ Customer's wallet signs EIP-3009 (no gas) ─▶ POST /api/pay (x402)
 | Terminal | `npm run chat` | For local testing |
 | HTTP dev chat | `POST /dev/chat`, only when `DEV_CHAT_TOKEN` is set | Off in production |
 | Web voice | `/voice`: speak to the agent in the browser, answers in voice (ElevenLabs) | `VOICE_WEB=off` in production |
+| AI agents (MCP) | `/mcp`: an agent browses stores and menus, places an order and pays it with x402 | `MCP_CHANNEL=on` on Fuji |
 
 ## Features
 
@@ -42,6 +43,22 @@ Customer's wallet signs EIP-3009 (no gas) ─▶ POST /api/pay (x402)
   - an inbox that survives restarts: no message is answered twice, and pending ones are picked up again after a crash;
   - an outbox with retries for notifications;
   - rate limits per IP and a 64 KB body limit.
+
+## Buy through an AI agent (MCP)
+
+With `MCP_CHANNEL=on`, Kanjō serves an MCP endpoint at `/mcp` (Streamable HTTP). Any agent can buy from any store in the instance:
+
+| Tool | Cost | What it does |
+| --- | --- | --- |
+| `stores` | free | Stores you can buy from |
+| `menu` | free | Products of a store: id, price in USDC, available stock |
+| `place_order` | free | Creates an unpaid order and returns `order_id`, `token` and the total |
+| `order_status` | free | Status of an order and its payment transaction |
+| `pay_order` | **the order total** | Charges exactly the total with x402 into the store's SplitVault and marks the order paid |
+
+`pay_order` uses the same checks as the web checkout: valid token, order still pending, stock available, one settlement at a time, and one payment row per transaction. A second payment is refused before it is charged. Orders placed by agents never trigger customer messages; the store still gets its notice. At most `MCP_MAX_PENDING` unpaid agent orders exist at once (default 20), and `/mcp` is rate limited per IP (`MCP_PER_MINUTE`, default 60).
+
+From OpenCode, Claude Code or Codex, use [`@zero-two-labs/sekisho-mcp`](../../packages/sekisho-mcp) with `SEKISHO_MCP_URL=https://kanjo.zerotwolabs.xyz/mcp`. Raise its per-call cap to cover an order (for example `SEKISHO_MAX_PER_CALL=5`): its 0.01 USDC default would refuse a real order, on purpose.
 
 ## Run it locally
 
@@ -74,12 +91,13 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 | `WHATSAPP_*`, `NOTIFY_CHANNEL`, `MERCHANT_WA_ID` | for WhatsApp | Cloud API credentials and where notices go |
 | `FIRECRAWL_API_KEY`, `FX_MXN_PER_USDC` | for catalog import | Firecrawl key and MXN rate |
 | `ELEVENLABS_*`, `VOICE_WEB`, `VOICE_REPLIES` | for voice | ElevenLabs key and voice, and which channels speak |
+| `MCP_CHANNEL`, `MCP_MAX_PENDING`, `MCP_PER_MINUTE` | for agents | Turns on `/mcp` and its limits |
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Payment safety, split policy, security, inbox and catalog/voice checks |
+| `npm test` | Payment safety, split policy, security, inbox, catalog/voice and MCP checks |
 | `npm run typecheck` | TypeScript check |
 | `npm run db:check` | Runs a test order through the store database (catalog, order, payment) |
 | `npm run pay:check` | Shows the payment quote (vault, amount, network) of the latest pending order |

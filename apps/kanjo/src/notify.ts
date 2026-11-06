@@ -21,9 +21,21 @@ export function isWebCustomer(waId: string): boolean {
   return waId.startsWith("web-");
 }
 
+/** Clientes que compran a través de un agente de IA por MCP. Tampoco tienen WhatsApp. */
+export function isAgentCustomer(waId: string): boolean {
+  return waId.startsWith("mcp-");
+}
+
+/** Clientes sin un canal directo de mensajes: a ellos no se les envían avisos. */
+function hasNoDirectChannel(waId: string): boolean {
+  return isWebCustomer(waId) || isAgentCustomer(waId);
+}
+
 /** Cómo se muestra el cliente en los avisos a la tienda. */
 function customerLabel(waId: string): string {
-  return isWebCustomer(waId) ? `${customerName(waId)} (canal web)` : `${customerName(waId)} (+${waId})`;
+  if (isWebCustomer(waId)) return `${customerName(waId)} (canal web)`;
+  if (isAgentCustomer(waId)) return `${customerName(waId)} (agente de IA por MCP)`;
+  return `${customerName(waId)} (+${waId})`;
 }
 
 function customerName(waId: string): string {
@@ -52,7 +64,7 @@ export function enqueueOrderPaid(orderId: string): number {
       : "";
 
   if (
-    !isWebCustomer(order.customer_wa_id) &&
+    !hasNoDirectChannel(order.customer_wa_id) &&
     enqueueNotification(
       `order-paid:${order.id}:customer`,
       order.customer_wa_id,
@@ -93,7 +105,7 @@ export function enqueueDuplicatePayment(orderId: string, paymentTx: string, amou
   const { order } = found;
   const amount = formatUsdc(amountAtomic);
 
-  if (!isWebCustomer(order.customer_wa_id)) {
+  if (!hasNoDirectChannel(order.customer_wa_id)) {
     enqueueNotification(
       `duplicate:${paymentTx}:customer`,
       order.customer_wa_id,

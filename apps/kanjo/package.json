@@ -4,7 +4,7 @@
   "description": "AI sales agent for small businesses: chats with customers, builds orders and collects USDC through Sekisho",
   "main": "index.js",
   "scripts": {
-    "test": "npm run test:safety && npm run test:distribution && npm run test:security && npm run test:inbox && npm run test:catalog",
+    "test": "npm run test:safety && npm run test:distribution && npm run test:security && npm run test:inbox && npm run test:catalog && npm run test:mcp",
     "dev": "npm run build:web && node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/index.ts",
     "chat": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/dev-chat.ts",
     "seed": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/seed.ts",
@@ -22,6 +22,7 @@
     "test:security": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-security.ts",
     "test:inbox": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-inbox.ts",
     "test:catalog": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-catalog-import.ts",
+    "test:mcp": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-mcp.ts",
     "catalog:import": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/import-catalog.ts",
     "catalog:apply": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/apply-catalog.ts",
     "voice:check": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/check-voice.ts"
@@ -34,12 +35,15 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
     "@hono/node-server": "^2.1.5",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@x402/core": "^2.29.0",
     "@x402/evm": "^2.29.0",
     "@x402/fetch": "^2.29.0",
     "@x402/hono": "^2.29.0",
+    "@x402/mcp": "^2.29.0",
     "@zero-two-labs/sekisho": "^0.5.2",
-    "hono": "^4.13.13"
+    "hono": "^4.13.13",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

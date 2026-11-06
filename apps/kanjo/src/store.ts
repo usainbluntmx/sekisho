@@ -70,6 +70,18 @@ export interface PaymentRecord {
 
 // ─────────────── Tienda y catálogo ───────────────
 
+export function listStores(): Store[] {
+  return db.prepare("SELECT id, name, merchant_address FROM stores ORDER BY name").all() as unknown as Store[];
+}
+
+/** Pedidos sin pagar de los clientes cuyo id empieza con el prefijo (p. ej. "mcp-"). */
+export function countPendingOrders(customerPrefix: string): number {
+  const row = db
+    .prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'pending_payment' AND customer_wa_id LIKE ? || '%'")
+    .get(customerPrefix) as { n: number };
+  return Number(row.n);
+}
+
 export function getStore(id: string): Store | undefined {
   return db
     .prepare("SELECT id, name, merchant_address FROM stores WHERE id = ?")

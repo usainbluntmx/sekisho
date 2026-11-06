@@ -52,6 +52,10 @@ if (env.WHATSAPP_TOKEN && !env.WHATSAPP_APP_SECRET) {
 }
 
 // Catálogo desde URL (Firecrawl) y voz (ElevenLabs): apagadas no cambian nada
+if (env.MCP_CHANNEL && !["on", "off"].includes(env.MCP_CHANNEL)) problems.push('MCP_CHANNEL: debe ser "on" u "off"');
+positiveNumber("MCP_MAX_PENDING");
+positiveNumber("MCP_PER_MINUTE");
+
 for (const name of ["VOICE_REPLIES", "VOICE_WEB"]) {
   if (env[name] && !["on", "off"].includes(env[name]!)) problems.push(`${name}: debe ser "on" u "off"`);
 }

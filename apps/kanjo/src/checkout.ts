@@ -8,24 +8,12 @@ import {
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { toFacilitatorClient } from "@zero-two-labs/sekisho";
-import {
-  getOrder,
-  getStockShortages,
-  getStore,
-  markOrderPaid,
-  recordPayment,
-  type PaymentRecord,
-} from "./store.js";
-import { getPaymentMethod } from "./payments/index.js";
-import { facilitator, sekisho, type UsdcQuoteDetails } from "./payments/usdc-sekisho.js";
+import { getOrder, getStore } from "./store.js";
+import { facilitator, sekisho } from "./payments/usdc-sekisho.js";
 import { renderCheckoutPage, renderNotFound } from "./web/checkout-page.js";
-import { enqueueDuplicatePayment, enqueueOrderPaid } from "./notify.js";
-import { processOutbox } from "./outbox.js";
-import { endSettlement, isSettling, tryStartSettlement } from "./settlement-guard.js";
-import { safeEqual } from "./security.js";
-import { checkAfterPayment } from "./distributor.js";
+import { endSettlement } from "./settlement-guard.js";
+import { blockReason, claimForSettlement, hasValidToken, quoteFor, recordSettledOrder } from "./order-payment.js";
 
-const STORE_ID = process.env.STORE_ID ?? "cafe-kanjo";
 const NETWORK = `eip155:${sekisho.config.chain.id}` as const;
 const EXPLORER = sekisho.config.explorer;
 
@@ -43,88 +31,6 @@ type QueryParamReader = { adapter: { getQueryParam?: (name: string) => string | 
 function orderIdFrom(context: QueryParamReader): string {
   const value = context.adapter.getQueryParam?.("order");
   return (Array.isArray(value) ? value[0] : value ?? "").toUpperCase();
-}
-
-async function quoteFor(orderId: string): Promise<UsdcQuoteDetails> {
-  const found = getOrder(orderId);
-  const store = getStore(STORE_ID);
-  if (!found || !store) throw new Error(`Pedido no encontrado: ${orderId}`);
-  const quote = await getPaymentMethod().createQuote(found.order, store);
-  return quote.details as UsdcQuoteDetails;
-}
-
-/** true si el token corresponde al pedido (sin token válido, el pedido "no existe"). */
-function hasValidToken(orderId: string, token: string): boolean {
-  const found = getOrder(orderId);
-  return Boolean(found?.order.pay_token && token && safeEqual(token, found.order.pay_token));
-}
-
-interface BlockReason {
-  status: 404 | 409;
-  error: string;
-}
-
-/** Motivo por el que un pedido no se puede cobrar en este momento, o null si sí se puede. */
-function blockReason(orderId: string, token: string): BlockReason | null {
-  if (!hasValidToken(orderId, token)) return { status: 404, error: "Pedido no encontrado." };
-
-  const found = getOrder(orderId)!;
-  if (found.order.status !== "pending_payment") {
-    return { status: 409, error: "Este pedido ya fue pagado o ya no está disponible." };
-  }
-
-  if (isSettling(orderId)) {
-    return { status: 409, error: "Ya hay un pago en proceso para este pedido. Espera unos segundos." };
-  }
-
-  const shortages = getStockShortages(orderId);
-  if (shortages.length > 0) {
-    const names = shortages.map((s) => `${s.name} (quedan ${s.available})`).join(", ");
-    return {
-      status: 409,
-      error: `Sin stock suficiente: ${names}. Pide al asistente que ajuste tu pedido.`,
-    };
-  }
-
-  return null;
-}
-
-function recordSafely(payment: PaymentRecord): void {
-  try {
-    recordPayment(payment);
-  } catch (error) {
-    console.error(`[checkout] No se pudo registrar el pago ${payment.tx}:`, error);
-  }
-}
-
-/** Procesa la bandeja de salida en segundo plano; si falla, se registra y el worker reintenta. */
-function kickOutbox(): void {
-  processOutbox().catch((error) =>
-    console.error("[checkout] Error al procesar avisos (el worker reintenta):", error)
-  );
-}
-
-/** Tareas posteriores al pago: reparto (según el modo) y avisos por la bandeja de salida. */
-async function afterOrderPaid(orderId: string, tx: string): Promise<void> {
-  const found = getOrder(orderId);
-  const store = getStore(STORE_ID);
-  if (!found || !store) return;
-
-  try {
-    enqueueOrderPaid(orderId);
-    kickOutbox();
-  } catch (error) {
-    console.error("[checkout] No se pudieron encolar los avisos (se recuperan al reiniciar):", error);
-  }
-
-  try {
-    await getPaymentMethod().afterPaid?.(found.order, store, tx);
-  } catch (error) {
-    console.error("[checkout] El reparto falló (el distributor lo recupera):", error);
-  }
-
-  // Por lotes: revisa la política en cuanto entra el pago (sin esperar la revisión periódica)
-  checkAfterPayment(store.merchant_address as `0x${string}`);
 }
 
 /**
@@ -208,15 +114,8 @@ export function registerCheckout(app: Hono): void {
     const ctx = paymentContext.getStore();
     if (!ctx) return;
 
-    const blocked = blockReason(ctx.orderId, ctx.payToken);
-    if (blocked) {
-      console.warn(`[checkout] Liquidación cancelada para ${ctx.orderId}: ${blocked.error}`);
-      return { abort: true as const, reason: blocked.error };
-    }
-
-    if (!tryStartSettlement(ctx.orderId)) {
-      return { abort: true as const, reason: "Ya hay un pago en proceso para este pedido." };
-    }
+    const refused = claimForSettlement(ctx.orderId, ctx.payToken);
+    if (refused) return { abort: true as const, reason: refused };
     ctx.ownsSettlement = true;
   });
 
@@ -224,74 +123,12 @@ export function registerCheckout(app: Hono): void {
   resourceServer.onAfterSettle(async (context) => {
     const ctx = paymentContext.getStore();
     if (!ctx) return;
-
-    const { orderId } = ctx;
-    const tx = context.result.transaction;
-    const base = {
-      tx,
-      orderId,
+    recordSettledOrder(ctx.orderId, {
+      tx: context.result.transaction,
       payer: context.result.payer,
       amountAtomic: Number(context.requirements.amount),
-    };
-
-    let result: ReturnType<typeof markOrderPaid>;
-    try {
-      result = markOrderPaid(orderId, tx);
-    } catch (error) {
-      console.error(
-        `[checkout] CRÍTICO: el pago ${tx} se liquidó pero el pedido ${orderId} no se pudo actualizar`,
-        error
-      );
-      recordSafely({ ...base, kind: "order" });
-      return;
-    }
-
-    if (!result.updated) {
-      recordSafely({ ...base, kind: "duplicate" });
-      console.warn(`[checkout] Pago duplicado del pedido ${orderId} → ${EXPLORER}/tx/${tx}`);
-      try {
-        enqueueDuplicatePayment(orderId, tx, base.amountAtomic);
-        kickOutbox();
-      } catch (error) {
-        console.error("[checkout] No se pudo encolar el aviso de duplicado:", error);
-      }
-      return;
-    }
-
-    recordSafely({ ...base, kind: "order" });
-    console.log(`[checkout] Pedido ${orderId} pagado → ${EXPLORER}/tx/${tx}`);
-    if (result.shortages.length > 0) {
-      console.warn(`[checkout] Pedido ${orderId} pagado SIN stock suficiente:`, result.shortages);
-    }
-
-    afterOrderPaid(orderId, tx).catch((error) =>
-      console.error(`[checkout] Error en tareas posteriores al pago del pedido ${orderId}:`, error)
-    );
+    });
   });
-
-  // 1) Página de pago (requiere el token del link)
-  app.get("/pay/:orderId", (c) => {
-    const orderId = c.req.param("orderId").toUpperCase();
-    const token = c.req.query("t") ?? "";
-    const store = getStore(STORE_ID);
-
-    if (!store || !hasValidToken(orderId, token)) return c.html(renderNotFound(), 404);
-    const found = getOrder(orderId)!;
-
-    return c.html(
-      renderCheckoutPage({
-        store,
-        order: found.order,
-        items: found.items,
-        usdc: sekisho.config.usdc,
-        chainId: sekisho.config.chain.id,
-        explorer: EXPLORER,
-        payToken: token,
-      })
-    );
-  });
-
-  // 2) Validación previa al cobro (antes de pedir la firma) y liberación del candado al terminar
   app.use("/api/pay", async (c, next) => {
     const orderId = (c.req.query("order") ?? "").toUpperCase();
     const token = c.req.query("t") ?? "";

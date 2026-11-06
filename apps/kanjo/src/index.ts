@@ -18,7 +18,8 @@ import {
 } from "./inbox.js";
 import { startDistributionScheduler } from "./distributor.js";
 import { NETWORK } from "./network.js";
-import { operator, sekisho } from "./payments/usdc-sekisho.js";
+import { facilitator, operator, sekisho } from "./payments/usdc-sekisho.js";
+import { registerMcp, MCP_PATH } from "./mcp.js";
 import { startOutboxWorker } from "./outbox.js";
 import { recoverPaidNotifications } from "./notify.js";
 import { limitBody, rateLimit, safeEqual } from "./security.js";
@@ -56,6 +57,20 @@ registerCheckout(app);
 
 // Canal de voz web (VOICE_WEB=on)
 registerVoiceWeb(app);
+
+// Canal MCP para agentes de IA (MCP_CHANNEL=on): menú, pedido y pago x402
+const MCP_ON = process.env.MCP_CHANNEL === "on";
+if (MCP_ON) {
+  await registerMcp(
+    app,
+    {
+      facilitator,
+      network: `eip155:${sekisho.config.chain.id}`,
+      maxPendingOrders: Number(process.env.MCP_MAX_PENDING ?? 20),
+    },
+    rateLimit({ max: Number(process.env.MCP_PER_MINUTE ?? 60), windowMs: 60_000 })
+  );
+}
 
 // Verificación del webhook (Meta envía un GET al guardar la URL)
 app.get("/webhook", (c) => {
@@ -201,3 +216,4 @@ startDistributionScheduler();
 
 serve({ fetch: app.fetch, port: PORT });
 console.log(`[kanjo] Servidor en http://localhost:${PORT}`);
+if (MCP_ON) console.log(`[kanjo] Canal MCP: ${process.env.PUBLIC_BASE_URL ?? ""}${MCP_PATH} (stores, menu, place_order, order_status, pay_order)`);
