@@ -1,4 +1,5 @@
 import { NETWORK_CONFIG } from "./network.js";
+import { fulfillmentLine } from "./store-profile.js";
 import { db } from "./db.js";
 import { getOrder, getStore, type StockShortage } from "./store.js";
 import { formatUsdc } from "./money.js";
@@ -68,7 +69,7 @@ export function enqueueOrderPaid(orderId: string): number {
     enqueueNotification(
       `order-paid:${order.id}:customer`,
       order.customer_wa_id,
-      `✅ *¡Pago recibido!*\n\nPedido *${order.id}*\n${lines}\n*Total:* ${total} USDC\n\nGracias por tu compra en ${store?.name ?? "la tienda"} 🙌${customerWarning}`
+      `✅ *¡Pago recibido!*\n\nPedido *${order.id}*\n${lines}\n*Total:* ${total} USDC\n\n${store ? `${fulfillmentLine(store.profile)}\n\n` : ""}Gracias por tu compra en ${store?.name ?? "la tienda"} 🙌${customerWarning}`
     )
   ) {
     queued++;

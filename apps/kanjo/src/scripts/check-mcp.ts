@@ -126,6 +126,16 @@ try {
   const menu = await call("menu", { store_id: "tlapaleria" });
   check("menu da precio en USDC y disponibilidad", menu.json?.products?.[0]?.price_usdc === "2.43" && menu.json.products[0].available === 2);
   check("menu de una tienda inexistente → error claro", (await call("menu", { store_id: "nada" })).isError);
+  check("Sin perfil, menu dice 'not provided' en horario (el agente no inventa)", menu.json?.store?.hours === "not provided");
+  store.setStoreProfile("tlapaleria", {
+    businessType: "tlapaleria",
+    address: "Calle Herreros 8",
+    hours: "Lun a sáb 9:00–19:00",
+    fulfillment: "pickup",
+    prepMinutes: 15,
+  });
+  const menu2 = await call("menu", { store_id: "tlapaleria" });
+  check("Con perfil, menu da giro, horario, recoger y tiempo", menu2.json?.store?.type === "tlapalería" && menu2.json.store.hours === "Lun a sáb 9:00–19:00" && menu2.json.store.pickup_address === "Calle Herreros 8" && menu2.json.store.prep_minutes === 15);
 
   console.log("─── Pedido y pago ───");
   const order = await call("place_order", { store_id: "tlapaleria", items: [{ product_id: martillo, quantity: 2 }, { product_id: clavos, quantity: 1 }] });
@@ -151,6 +161,7 @@ try {
 
   const paid = await call("pay_order", { order_id, token });
   check("pay_order cobra y responde 'paid'", paid.paid && paid.json?.status === "paid");
+  check("…y dice cómo recibirlo según el perfil (sin inventar entrega)", /Recógelo en Calle Herreros 8\. Estará listo en unos 15 min\./.test(paid.json?.message ?? ""));
   check("Se cobró exactamente el total (5.21 USDC) al vault de la tienda", settled.length === 1 && settled[0].value === 5_210_000n && settled[0].to === getAddress(VAULT));
   const after = store.getOrder(order_id)!.order;
   check("El pedido quedó pagado con su transacción", after.status === "paid" && after.payment_tx === `0x${"ab".repeat(32)}`);

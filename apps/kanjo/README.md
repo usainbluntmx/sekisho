@@ -23,6 +23,34 @@ Customer's wallet signs EIP-3009 (no gas) ─▶ POST /api/pay (x402)
 - **Checkout:** a page that asks the customer's wallet for one EIP-3009 signature. The operator key submits it and pays the gas; the customer only needs USDC.
 - **Split:** USDC lands in the store's SplitVault. The [SDK distributor](../../sdk/README.md) splits in batches (≥ 5 USDC, or after 24 h once at least 0.25 USDC is pending), so gas stays below the fee.
 
+## Business profile
+
+Kanjō works for any kind of shop: the catalog says **what** it sells, and the business profile says **how**. Each store has one:
+
+| Field | Example | Used for |
+| --- | --- | --- |
+| `businessType` | `cafeteria`, `abarrotes`, `tlapaleria`, `carniceria`, `otro` | How the agent introduces the store |
+| `description` | "Carnicería de barrio: res, cerdo y pollo frescos." | Answering "what do you sell?" |
+| `hours` | "Lunes a sábado, 7:00 a 15:00" | Opening hours |
+| `fulfillment` | `pickup`, `delivery` or `both` | Whether the customer picks up or gets a delivery |
+| `address` / `deliveryArea` | "Av. Juárez 123" / "Centro y Roma" | Where to pick up / where the store delivers |
+| `prepMinutes` | `20` | "Ready in about 20 min" |
+| `policies`, `tone` | "No refunds on cut meat" / "friendly, formal" | Rules and voice of the agent |
+
+The agent can only state what the profile says. A field left empty reads as "not provided", and the agent answers that it will check with the store instead of making it up. After payment, the customer (WhatsApp) and the agent (MCP `pay_order`) get the same pickup or delivery line, for example *"Recógelo en Av. Juárez 123. Estará listo en unos 20 min."*
+
+Profiles are validated before they are saved: an unknown business type, a misspelled field, delivery without a delivery area or pickup without an address are rejected with a plain explanation, and the previous profile stays untouched.
+
+```bash
+npm run store:profile                                  # list stores
+npm run store:profile -- cafe-kanjo                    # show a profile and what is missing
+npm run store:profile -- --example > perfil.json       # example to edit
+npm run store:profile -- cafe-kanjo perfil.json        # preview: validates and shows the changes
+npm run store:profile -- cafe-kanjo perfil.json --apply
+```
+
+In the Docker image the same tool is `node dist/scripts/store-profile.js`.
+
 ## Channels
 
 | Channel | How | Status |
@@ -56,7 +84,7 @@ With `MCP_CHANNEL=on`, Kanjō serves an MCP endpoint at `/mcp` (Streamable HTTP)
 | `order_status` | free | Status of an order and its payment transaction |
 | `pay_order` | **the order total** | Charges exactly the total with x402 into the store's SplitVault and marks the order paid |
 
-`pay_order` uses the same checks as the web checkout: valid token, order still pending, stock available, one settlement at a time, and one payment row per transaction. A second payment is refused before it is charged. Orders placed by agents never trigger customer messages; the store still gets its notice. At most `MCP_MAX_PENDING` unpaid agent orders exist at once (default 20), and `/mcp` is rate limited per IP (`MCP_PER_MINUTE`, default 60).
+`stores` and `menu` include the store's business profile (hours, pickup or delivery, prep time), and `pay_order` answers with the pickup or delivery line, so the agent does not promise what the store does not offer. `pay_order` uses the same checks as the web checkout: valid token, order still pending, stock available, one settlement at a time, and one payment row per transaction. A second payment is refused before it is charged. Orders placed by agents never trigger customer messages; the store still gets its notice. At most `MCP_MAX_PENDING` unpaid agent orders exist at once (default 20), and `/mcp` is rate limited per IP (`MCP_PER_MINUTE`, default 60).
 
 From OpenCode, Claude Code or Codex, use [`@zero-two-labs/sekisho-mcp`](../../packages/sekisho-mcp) with `SEKISHO_MCP_URL=https://kanjo.zerotwolabs.xyz/mcp`. Raise its per-call cap to cover an order (for example `SEKISHO_MAX_PER_CALL=5`): its 0.01 USDC default would refuse a real order, on purpose.
 
@@ -97,7 +125,8 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Payment safety, split policy, security, inbox, catalog/voice and MCP checks |
+| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP and business profile checks |
+| `npm run store:profile` | Show, preview and save a store's business profile |
 | `npm run typecheck` | TypeScript check |
 | `npm run db:check` | Runs a test order through the store database (catalog, order, payment) |
 | `npm run pay:check` | Shows the payment quote (vault, amount, network) of the latest pending order |

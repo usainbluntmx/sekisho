@@ -85,6 +85,11 @@ if (!hasColumn("orders", "stock_issue")) {
   db.exec("ALTER TABLE orders ADD COLUMN stock_issue TEXT");
 }
 
+// Perfil de negocio (JSON validado en store-profile.ts): giro, horario, entrega, políticas…
+if (!hasColumn("stores", "profile")) {
+  db.exec("ALTER TABLE stores ADD COLUMN profile TEXT NOT NULL DEFAULT '{}'");
+}
+
 // Token secreto del link de pago (128 bits)
 if (!hasColumn("orders", "pay_token")) {
   db.exec("ALTER TABLE orders ADD COLUMN pay_token TEXT");

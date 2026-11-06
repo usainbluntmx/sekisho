@@ -20,6 +20,7 @@ import { formatUsdc } from "./money.js";
 import { endSettlement } from "./settlement-guard.js";
 import { countPendingOrders, createOrder, getOrder, getStore, listProducts, listStores, upsertCustomer } from "./store.js";
 import { blockReason, claimForSettlement, quoteFor, recordSettledOrder } from "./order-payment.js";
+import { BUSINESS_TYPES, FULFILLMENT, fulfillmentLine, type StoreProfile } from "./store-profile.js";
 import type { UsdcQuoteDetails } from "./payments/usdc-sekisho.js";
 
 export const MCP_PATH = "/mcp";
@@ -42,6 +43,18 @@ const text = (value: unknown) => ({
   content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }],
 });
 const fail = (message: string) => ({ ...text(message), isError: true });
+
+/** Lo que un agente necesita saber de la tienda para no inventar (vacío = no registrado). */
+const storeInfo = (p: StoreProfile) => ({
+  type: BUSINESS_TYPES[p.businessType],
+  description: p.description || undefined,
+  hours: p.hours || "not provided",
+  fulfillment: FULFILLMENT[p.fulfillment],
+  pickup_address: p.fulfillment !== "delivery" ? p.address || "not provided" : undefined,
+  delivery_area: p.fulfillment !== "pickup" ? p.deliveryArea || "not provided" : undefined,
+  prep_minutes: p.prepMinutes,
+  policies: p.policies || undefined,
+});
 
 export async function createKanjoMcp(options: McpOptions) {
   const quote = options.quote ?? quoteFor;
@@ -106,7 +119,8 @@ export async function createKanjoMcp(options: McpOptions) {
             order_id: orderId,
             status: "paid",
             total_usdc: formatUsdc(found.order.total_atomic),
-            message: "Pago recibido. La tienda ya fue avisada.",
+            message: `Pago recibido. La tienda ya fue avisada. ${fulfillmentLine(getStore(found.order.store_id)!.profile)}`,
+            note: "Tell the customer exactly this; do not promise delivery or times that are not stated here.",
           });
         })(args as Record<string, unknown>, extra as never)
       );
@@ -119,19 +133,26 @@ export async function createKanjoMcp(options: McpOptions) {
   function build(): McpServer {
     const server = new McpServer({ name: "kanjo", version: "0.1.0" });
 
-    server.tool("stores", "Free. Lists the stores you can buy from (id and name).", {}, async () =>
-      text(listStores().map((s) => ({ id: s.id, name: s.name })))
+    server.tool("stores", "Free. Lists the stores you can buy from: id, name, type and description.", {}, async () =>
+      text(
+        listStores().map((s) => ({
+          id: s.id,
+          name: s.name,
+          type: BUSINESS_TYPES[s.profile.businessType],
+          description: s.profile.description || undefined,
+        }))
+      )
     );
 
     server.tool(
       "menu",
-      "Free. Products of a store with their id, price in USDC and whether they are available.",
+      "Free. Store info (hours, pickup or delivery, prep time) and its products with id, price in USDC and stock. Only state what is here.",
       { store_id: z.string().min(1).max(64) },
       async ({ store_id }) => {
         const store = getStore(store_id);
         if (!store) return fail(`No existe la tienda "${store_id}". Usa la tool stores.`);
         return text({
-          store: { id: store.id, name: store.name },
+          store: { id: store.id, name: store.name, ...storeInfo(store.profile) },
           currency: "USDC",
           products: listProducts(store.id).map((p) => ({
             id: p.id,

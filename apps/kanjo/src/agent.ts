@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { TOOLS, executeTool } from "./tools.js";
 import { getHistory, saveExchange } from "./memory.js";
 import type { Store } from "./store.js";
+import { BUSINESS_TYPES, profileForPrompt } from "./store-profile.js";
 
 const client = new Anthropic(); // lee ANTHROPIC_API_KEY del entorno
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-haiku-5-5";
@@ -17,9 +18,12 @@ El cliente te está hablando por voz y tu respuesta se convertirá en audio:
 - Al crear el pedido, incluye igual el id del pedido y el payment_url tal cual: el sistema los muestra en pantalla y no los lee en voz.`;
 
 function buildSystemPrompt(store: Store, customerName: string): string {
-  return `Eres el asistente de ventas por WhatsApp de "${store.name}". Atiendes a ${customerName || "un cliente"}.
+  return `Eres el asistente de ventas por WhatsApp de "${store.name}" (${BUSINESS_TYPES[store.profile.businessType]}). Atiendes a ${customerName || "un cliente"}.
 
 Tu objetivo: ayudar al cliente a elegir productos y cerrar su pedido de forma amable y rápida.
+
+Datos de la tienda (son los únicos que puedes dar; lo que diga "no registrado" o no aparezca, no lo sabes):
+${profileForPrompt(store.profile)}
 
 Reglas:
 - Responde en español, de forma breve y cálida, como en un chat de WhatsApp (2 a 5 líneas normalmente).
@@ -34,7 +38,8 @@ Reglas:
 - Cuando el pago se confirma, el cliente recibe un aviso automático; no necesitas prometer nada más.
 - Responde solo lo que el cliente pidió. No ofrezcas productos adicionales a menos que el cliente pregunte o pida recomendaciones.
 - Si una herramienta devuelve un error, explícalo en palabras simples y ofrece una alternativa.
-- Si te preguntan algo fuera de la tienda, redirige amablemente a los productos.`;
+- Horario, entrega a domicilio, dirección, tiempos y políticas: usa solo los datos de la tienda de arriba. Si algo no está, di que lo confirmas con la tienda; nunca lo inventes ni prometas entregas que la tienda no ofrece.
+- Si te preguntan algo fuera de la tienda, redirige amablemente a los productos.${store.profile.tone ? `\n- Tono: ${store.profile.tone}.` : ""}`;
 }
 
 export interface AgentInput {

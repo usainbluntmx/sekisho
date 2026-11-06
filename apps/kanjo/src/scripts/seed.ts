@@ -1,5 +1,6 @@
 import { db } from "../db.js";
 import { usdc } from "../money.js";
+import { getStore, setStoreProfile } from "../store.js";
 
 const STORE_ID = process.env.STORE_ID ?? "cafe-kanjo";
 const STORE_NAME = process.env.STORE_NAME ?? "Café Kanjō";
@@ -33,4 +34,21 @@ if (count === 0) {
   console.log(`✔ La tienda ya tenía ${count} productos (no se duplicaron)`);
 }
 
-console.log(`✔ Tienda lista: ${STORE_NAME} (${STORE_ID}) → vendedor ${MERCHANT}`);
+// Perfil de ejemplo para la tienda demo, solo si todavía no tiene uno (nunca pisa lo que la tienda llenó)
+const current = db.prepare("SELECT profile FROM stores WHERE id = ?").get(STORE_ID) as { profile: string };
+if (STORE_ID === "cafe-kanjo" && current.profile === "{}") {
+  const result = setStoreProfile(STORE_ID, {
+    businessType: "cafeteria",
+    description: "Cafetería de especialidad mexicana (tienda de demostración de Kanjō).",
+    address: "Mostrador de Café Kanjō (demo)",
+    hours: "Lunes a domingo, 8:00 a 20:00 (demo)",
+    fulfillment: "pickup",
+    prepMinutes: 10,
+    policies: "Tienda de demostración: los pedidos se pagan con USDC de prueba (Fuji) y no se entregan.",
+    tone: "cercano y breve, de tú",
+  });
+  console.log(result.ok ? "✔ Perfil de ejemplo guardado" : `✘ Perfil de ejemplo inválido: ${result.problems.join("; ")}`);
+}
+
+const store = getStore(STORE_ID)!;
+console.log(`✔ Tienda lista: ${STORE_NAME} (${STORE_ID}) · ${store.profile.businessType} → vendedor ${MERCHANT}`);

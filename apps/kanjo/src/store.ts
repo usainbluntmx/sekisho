@@ -1,11 +1,17 @@
 import { randomBytes } from "node:crypto";
+import { parseStoredProfile, validateProfile, type StoreProfile } from "./store-profile.js";
 import { db } from "./db.js";
 
 export interface Store {
   id: string;
   name: string;
   merchant_address: string;
+  /** Perfil de negocio ya validado (vacío si la tienda no lo ha llenado). */
+  profile: StoreProfile;
 }
+
+type StoreRow = Omit<Store, "profile"> & { profile: string };
+const toStore = (row: StoreRow): Store => ({ ...row, profile: parseStoredProfile(row.profile, row.id) });
 
 export interface Product {
   id: number;
@@ -71,7 +77,16 @@ export interface PaymentRecord {
 // ─────────────── Tienda y catálogo ───────────────
 
 export function listStores(): Store[] {
-  return db.prepare("SELECT id, name, merchant_address FROM stores ORDER BY name").all() as unknown as Store[];
+  return (db.prepare("SELECT id, name, merchant_address, profile FROM stores ORDER BY name").all() as unknown as StoreRow[]).map(toStore);
+}
+
+/** Guarda el perfil SOLO si es válido. Devuelve los problemas si no lo es (y no cambia nada). */
+export function setStoreProfile(storeId: string, input: unknown): { ok: true; profile: StoreProfile } | { ok: false; problems: string[] } {
+  if (!getStore(storeId)) return { ok: false, problems: [`no existe la tienda ${storeId}`] };
+  const result = validateProfile(input);
+  if (!result.ok) return result;
+  db.prepare("UPDATE stores SET profile = ? WHERE id = ?").run(JSON.stringify(result.profile), storeId);
+  return result;
 }
 
 /** Pedidos sin pagar de los clientes cuyo id empieza con el prefijo (p. ej. "mcp-"). */
@@ -83,9 +98,10 @@ export function countPendingOrders(customerPrefix: string): number {
 }
 
 export function getStore(id: string): Store | undefined {
-  return db
-    .prepare("SELECT id, name, merchant_address FROM stores WHERE id = ?")
-    .get(id) as unknown as Store | undefined;
+  const row = db.prepare("SELECT id, name, merchant_address, profile FROM stores WHERE id = ?").get(id) as unknown as
+    | StoreRow
+    | undefined;
+  return row && toStore(row);
 }
 
 export function listProducts(storeId: string): Product[] {
