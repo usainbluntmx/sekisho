@@ -43,6 +43,32 @@ How customers reach a store:
 | Web voice | `/voice?store=<id>` |
 | AI agents (MCP) | `stores` lists them; `menu`, `place_order` take a `store_id` |
 
+## Templates and catalog from a file
+
+Most small shops have no website to import a catalog from. A template per business type gives them a profile and a catalog to edit, and `catalog:load` loads that catalog with the same preview → apply flow as the web import. Templates exist for `cafeteria`, `abarrotes`, `tlapaleria` and `carniceria`; the demo café is just one example. For any other kind of shop, start from the closest one and set `businessType` to `otro`.
+
+```bash
+npm run store:template                                     # list templates
+npm run store:template -- carniceria                       # writes plantilla-carniceria/perfil.json and catalogo.json (never overwrites)
+npm run store:profile -- carniceria-don-pepe plantilla-carniceria/perfil.json --apply
+npm run catalog:load -- carniceria-don-pepe plantilla-carniceria/catalogo.json            # preview
+npm run catalog:load -- carniceria-don-pepe plantilla-carniceria/catalogo.json --apply    # save (--replace also turns off products not in the file)
+```
+
+A template's address, hours and delivery area are left empty on purpose: the profile cannot be saved until the shop fills them in. A catalog file looks like this:
+
+```json
+{
+  "currency": "MXN",
+  "items": [
+    { "name": "Arrachera", "price": 380, "unit": "kg", "stock": 10, "category": "Res" },
+    { "name": "Martillo de uña 16 oz", "price": 185, "stock": 6 }
+  ]
+}
+```
+
+`unit` is `pieza` (the default) or `kg`. For `kg` the price is per kilo and `stock` is in kilos (2.5 = 2 kg 500 g). Prices in MXN are converted with `FX_MXN_PER_USDC` and rounded to cents; `USD` and `USDC` need no rate. The whole file is checked before anything is saved: a misspelled field, a price of 0 or written as text, a repeated name, pieces with decimals or a negative stock are rejected with the product and the reason, and the store stays as it was. Loading the same file twice changes nothing; a file with a new stock count updates it.
+
 ## Business profile
 
 Kanjō works for any kind of shop: the catalog says **what** it sells, and the business profile says **how**. Each store has one:
@@ -69,7 +95,7 @@ npm run store:profile -- cafe-kanjo perfil.json        # preview: validates and 
 npm run store:profile -- cafe-kanjo perfil.json --apply
 ```
 
-In the Docker image the same tools are `node dist/scripts/store-profile.js` and `node dist/scripts/store-create.js`.
+In the Docker image the same tools are `node dist/scripts/store-profile.js`, `store-create.js` and `load-catalog.js`, run from `/app`.
 
 ## Channels
 
@@ -148,8 +174,10 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store and weight/expiry checks |
+| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store, weight/expiry and template checks |
 | `npm run store:create` | Preview and create a store (id, name, wallet, optional profile) |
+| `npm run store:template -- <type>` | Example profile and catalog to edit for a business type |
+| `npm run catalog:load -- <store> <file>` | Preview and load a catalog from a JSON file |
 | `npm run store:profile` | Show, preview and save a store's business profile |
 | `npm run typecheck` | TypeScript check |
 | `npm run db:check` | Runs a test order through the store database (catalog, order, payment) |

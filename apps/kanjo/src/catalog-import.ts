@@ -42,6 +42,7 @@ interface ExistingProduct {
   description: string;
   price_atomic: number;
   unit: "pieza" | "kg";
+  stock: number;
   category: string | null;
   image_url: string | null;
 }
@@ -49,7 +50,7 @@ interface ExistingProduct {
 function activeProducts(storeId: string): ExistingProduct[] {
   return db
     .prepare(
-      "SELECT id, name, description, price_atomic, unit, category, image_url FROM products WHERE store_id = ? AND active = 1"
+      "SELECT id, name, description, price_atomic, unit, stock, category, image_url FROM products WHERE store_id = ? AND active = 1"
     )
     .all(storeId) as unknown as ExistingProduct[];
 }
@@ -69,6 +70,7 @@ export function diffAgainstStore(storeId: string, items: CatalogItem[]): Catalog
     else if (
       found.price_atomic !== item.price_atomic ||
       found.unit !== (item.unit ?? "pieza") ||
+      (item.stock !== undefined && found.stock !== item.stock) ||
       found.description !== item.description ||
       (found.category ?? "") !== item.category ||
       (found.image_url ?? null) !== item.image_url
@@ -123,16 +125,31 @@ export async function previewCatalog(storeId: string, url: string): Promise<Cata
   });
   if (items.length === 0) throw new Error(`No se extrajo ningún producto con precio. ${warnings.slice(0, 3).join(" · ")}`);
 
-  const diff = diffAgainstStore(storeId, items);
-  const id = randomBytes(4).toString("hex").toUpperCase();
   const storeName = typeof extracted.store_name === "string" ? extracted.store_name : null;
+  return savePreview({ storeId, source: url, currency, items, warnings, storeName });
+}
 
+/**
+ * Guarda una vista previa (de la web o de un archivo) con su diff. No toca products:
+ * se aplica después con applyCatalog, igual venga de donde venga.
+ */
+export function savePreview(input: {
+  storeId: string;
+  source: string;
+  currency: string;
+  items: CatalogItem[];
+  warnings?: string[];
+  storeName?: string | null;
+}): CatalogPreview {
+  const warnings = input.warnings ?? [];
+  const storeName = input.storeName ?? null;
+  const diff = diffAgainstStore(input.storeId, input.items);
+  const id = randomBytes(4).toString("hex").toUpperCase();
   db.prepare(
     `INSERT INTO catalog_imports (id, store_id, source_url, status, currency, payload)
      VALUES (?, ?, ?, 'preview', ?, ?)`
-  ).run(id, storeId, url, currency, JSON.stringify({ items, warnings, diff, store_name: storeName }));
-
-  return { id, store_id: storeId, source_url: url, currency, store_name: storeName, items, diff, warnings };
+  ).run(id, input.storeId, input.source, input.currency, JSON.stringify({ items: input.items, warnings, diff, store_name: storeName }));
+  return { id, store_id: input.storeId, source_url: input.source, currency: input.currency, store_name: storeName, items: input.items, diff, warnings };
 }
 
 /** Paso 2: aplica un preview. Idempotente: un import ya aplicado no se repite. */
@@ -166,18 +183,21 @@ export function applyCatalog(
     );
     // Si cambia la unidad, el stock anterior ya no significa lo mismo (piezas ≠ gramos): se reinicia
     const changeUnit = db.prepare("UPDATE products SET unit = ?, stock = ? WHERE id = ?");
+    const setStock = db.prepare("UPDATE products SET stock = ? WHERE id = ?");
     for (const item of items) {
       const unit = item.unit ?? "pieza"; // importaciones guardadas antes de existir la unidad
       const found = current.get(normalizeName(item.name));
       if (found) {
         update.run(item.name, item.description, item.price_atomic, item.category, item.image_url, found.id);
         if (found.unit !== unit) {
-          changeUnit.run(unit, stockFor(unit), found.id);
-          unitChanged.push(item.name);
+          changeUnit.run(unit, item.stock ?? stockFor(unit), found.id);
+          if (item.stock === undefined) unitChanged.push(item.name);
+        } else if (item.stock !== undefined) {
+          setStock.run(item.stock, found.id); // el archivo trae el conteo real de la tienda
         }
         updated++;
       } else {
-        insert.run(row.store_id, item.name, item.description, item.price_atomic, unit, stockFor(unit), item.category, item.image_url);
+        insert.run(row.store_id, item.name, item.description, item.price_atomic, unit, item.stock ?? stockFor(unit), item.category, item.image_url);
         added++;
       }
     }

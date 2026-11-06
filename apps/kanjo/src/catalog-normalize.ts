@@ -12,6 +12,8 @@ export interface CatalogItem {
   unit: Unit;
   category: string;
   image_url: string | null;
+  /** Existencias en unidades base (piezas o gramos). Solo vienen de un archivo; la importación web no las trae. */
+  stock?: number;
 }
 
 /** Mínimo por producto: 0.01 USDC. */
