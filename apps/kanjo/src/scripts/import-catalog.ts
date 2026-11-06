@@ -1,16 +1,18 @@
-import { getStore } from "../store.js";
+import { DEFAULT_STORE_ID, getStore } from "../store.js";
 import { applyCatalog, previewCatalog } from "../catalog-import.js";
 import { formatUsdc } from "../money.js";
 
-// Uso: npm run catalog:import -- <url> [--apply] [--replace]
-const STORE_ID = process.env.STORE_ID ?? "cafe-kanjo";
-const [url, ...flags] = process.argv.slice(2);
+// Uso: npm run catalog:import -- <url> [--store <id>] [--apply] [--replace]
+const argv = process.argv.slice(2);
+const storeFlag = argv.indexOf("--store");
+const STORE_ID = storeFlag >= 0 ? argv[storeFlag + 1] ?? "" : DEFAULT_STORE_ID;
+const [url, ...flags] = argv.filter((a, i) => i !== storeFlag && i !== storeFlag + 1);
 if (!url) {
-  console.error("Uso: npm run catalog:import -- <url> [--apply] [--replace]");
+  console.error("Uso: npm run catalog:import -- <url> [--store <id>] [--apply] [--replace]");
   process.exit(1);
 }
 if (!getStore(STORE_ID)) {
-  console.error(`La tienda ${STORE_ID} no existe. Corre npm run seed primero.`);
+  console.error(`La tienda "${STORE_ID}" no existe. Créala con npm run store:create o corre npm run seed.`);
   process.exit(1);
 }
 

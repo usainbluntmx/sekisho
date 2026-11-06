@@ -1,8 +1,7 @@
-import { getStore, upsertCustomer } from "./store.js";
+import { getCustomerStore, getStore, setCustomerStore, upsertCustomer } from "./store.js";
 import { clearHistory } from "./memory.js";
 import { runAgent } from "./agent.js";
 
-const STORE_ID = process.env.STORE_ID ?? "cafe-kanjo";
 
 export interface ChatMessage {
   from: string;
@@ -29,7 +28,18 @@ export async function handleMessage(msg: ChatMessage, reply: Reply): Promise<voi
 
   upsertCustomer(msg.from, msg.name);
 
-  const store = getStore(STORE_ID);
+  // Cambiar de tienda: "/tienda <id>" (los links de cada negocio mandan lo mismo por debajo)
+  const switchTo = msg.text.trim().match(/^\/tienda\s+([a-z0-9-]{3,40})$/i);
+  if (switchTo) {
+    const target = getStore(switchTo[1].toLowerCase());
+    if (!target || !setCustomerStore(msg.from, target.id)) {
+      return reply(msg.from, "No encontré esa tienda 🙈 Revisa el link que te compartieron.");
+    }
+    clearHistory(msg.from); // la conversación anterior era con otra tienda
+    return reply(msg.from, `¡Hola! Ahora estás con *${target.name}* 🙂 ¿En qué te ayudo?`);
+  }
+
+  const store = getCustomerStore(msg.from);
   if (!store) {
     return reply(msg.from, "La tienda aún no está configurada.");
   }

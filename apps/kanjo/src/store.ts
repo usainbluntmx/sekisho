@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { getAddress, isAddress, zeroAddress } from "viem";
 import { parseStoredProfile, validateProfile, type StoreProfile } from "./store-profile.js";
 import { db } from "./db.js";
 
@@ -75,6 +76,75 @@ export interface PaymentRecord {
 }
 
 // ─────────────── Tienda y catálogo ───────────────
+
+/** Tienda para clientes que todavía no eligieron una (la demo, o la del despliegue). */
+export const DEFAULT_STORE_ID = process.env.STORE_ID ?? "cafe-kanjo";
+
+/** Reglas para el id de una tienda: aparece en links, así que solo minúsculas, números y guiones. */
+export const STORE_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export interface NewStore {
+  id: string;
+  name: string;
+  merchant: string;
+  profile?: unknown;
+}
+
+/** Valida una tienda nueva sin guardar nada. Devuelve los problemas en palabras simples. */
+export function validateNewStore(input: NewStore): string[] {
+  const problems: string[] = [];
+  const id = input.id?.trim() ?? "";
+  if (!STORE_ID_RE.test(id) || id.length < 3 || id.length > 40) {
+    problems.push("id: de 3 a 40 caracteres, solo minúsculas, números y guiones (por ejemplo carniceria-don-pepe)");
+  } else if (getStore(id)) {
+    problems.push(`id: ya existe una tienda "${id}"`);
+  }
+  const name = input.name?.trim() ?? "";
+  if (name.length < 2 || name.length > 80) problems.push("nombre: de 2 a 80 caracteres");
+  const merchant = input.merchant?.trim() ?? "";
+  if (!isAddress(merchant, { strict: false })) {
+    problems.push("wallet del vendedor: no es una dirección válida (0x + 40 caracteres hexadecimales)");
+  } else if (getAddress(merchant) === zeroAddress) {
+    problems.push("wallet del vendedor: la dirección 0x000… no puede recibir pagos");
+  } else if (merchant !== merchant.toLowerCase() && !isAddress(merchant, { strict: true })) {
+    problems.push("wallet del vendedor: la dirección tiene mayúsculas que no coinciden con su checksum (¿se copió mal?)");
+  }
+  if (input.profile !== undefined) {
+    const result = validateProfile(input.profile);
+    if (!result.ok) problems.push(...result.problems.map((p) => `perfil · ${p}`));
+  }
+  return problems;
+}
+
+/** Crea la tienda SOLO si todo es válido (en una transacción: o queda completa, o no queda nada). */
+export function createStore(input: NewStore): { ok: true; store: Store } | { ok: false; problems: string[] } {
+  const problems = validateNewStore(input);
+  if (problems.length) return { ok: false, problems };
+  const profile = input.profile === undefined ? {} : (validateProfile(input.profile) as { profile: StoreProfile }).profile;
+  db.prepare("INSERT INTO stores (id, name, merchant_address, profile) VALUES (?, ?, ?, ?)").run(
+    input.id.trim(),
+    input.name.trim(),
+    getAddress(input.merchant.trim()),
+    JSON.stringify(profile)
+  );
+  return { ok: true, store: getStore(input.id.trim())! };
+}
+
+/** La tienda con la que habla el cliente; si no eligió (o ya no existe), la tienda por defecto. */
+export function getCustomerStore(waId: string): Store | undefined {
+  const row = db.prepare("SELECT store_id FROM customers WHERE wa_id = ?").get(waId) as { store_id: string | null } | undefined;
+  return (row?.store_id ? getStore(row.store_id) : undefined) ?? getStore(DEFAULT_STORE_ID);
+}
+
+/** Cambia la tienda de un cliente. Devuelve false si la tienda no existe (y no cambia nada). */
+export function setCustomerStore(waId: string, storeId: string): boolean {
+  if (!getStore(storeId)) return false;
+  db.prepare(
+    `INSERT INTO customers (wa_id, store_id) VALUES (?, ?)
+     ON CONFLICT(wa_id) DO UPDATE SET store_id = excluded.store_id`
+  ).run(waId, storeId);
+  return true;
+}
 
 export function listStores(): Store[] {
   return (db.prepare("SELECT id, name, merchant_address, profile FROM stores ORDER BY name").all() as unknown as StoreRow[]).map(toStore);

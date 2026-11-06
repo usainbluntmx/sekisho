@@ -23,6 +23,26 @@ Customer's wallet signs EIP-3009 (no gas) ─▶ POST /api/pay (x402)
 - **Checkout:** a page that asks the customer's wallet for one EIP-3009 signature. The operator key submits it and pays the gas; the customer only needs USDC.
 - **Split:** USDC lands in the store's SplitVault. The [SDK distributor](../../sdk/README.md) splits in batches (≥ 5 USDC, or after 24 h once at least 0.25 USDC is pending), so gas stays below the fee.
 
+## Stores
+
+One Kanjō instance serves many stores. Each store has its own catalog, business profile and wallet, and its sales are paid into that wallet's own SplitVault. Nothing has to be deployed to add a store: the vault address is known in advance and the vault is created on its first split.
+
+```bash
+npm run store:create -- carniceria-don-pepe "Carnicería Don Pepe" 0xYourWallet perfil.json           # preview
+npm run store:create -- carniceria-don-pepe "Carnicería Don Pepe" 0xYourWallet perfil.json --apply   # create
+npm run catalog:import -- <url> --store carniceria-don-pepe                                          # its catalog
+```
+
+A store is created only if everything is valid, and nothing is saved otherwise: the id (3–40 lowercase letters, numbers and dashes, used in links), the name, the wallet (a real address; a mixed-case address whose checksum fails is rejected as a likely copy error) and the optional profile. The profile can also be added later with `npm run store:profile`.
+
+How customers reach a store:
+
+| Channel | How |
+| --- | --- |
+| WhatsApp | The customer sends `/tienda <id>`. Kanjō remembers the store for that customer and starts a fresh conversation. Customers who never chose one talk to the default store (`STORE_ID`). |
+| Web voice | `/voice?store=<id>` |
+| AI agents (MCP) | `stores` lists them; `menu`, `place_order` take a `store_id` |
+
 ## Business profile
 
 Kanjō works for any kind of shop: the catalog says **what** it sells, and the business profile says **how**. Each store has one:
@@ -44,12 +64,12 @@ Profiles are validated before they are saved: an unknown business type, a misspe
 ```bash
 npm run store:profile                                  # list stores
 npm run store:profile -- cafe-kanjo                    # show a profile and what is missing
-npm run store:profile -- --example > perfil.json       # example to edit
+npm run -s store:profile -- --example > perfil.json    # example to edit (-s keeps npm's header out of the file)
 npm run store:profile -- cafe-kanjo perfil.json        # preview: validates and shows the changes
 npm run store:profile -- cafe-kanjo perfil.json --apply
 ```
 
-In the Docker image the same tool is `node dist/scripts/store-profile.js`.
+In the Docker image the same tools are `node dist/scripts/store-profile.js` and `node dist/scripts/store-create.js`.
 
 ## Channels
 
@@ -114,7 +134,7 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 | `ANTHROPIC_API_KEY` | yes | Claude API key for the agent |
 | `PUBLIC_BASE_URL` | yes | Public URL used in payment links |
 | `NETWORK` | no | `avalancheFuji` (default) or `avalanche` |
-| `STORE_ID`, `STORE_NAME` | no | Store seeded on start |
+| `STORE_ID`, `STORE_NAME` | no | Store seeded on start, and the default store for customers who have not chosen one |
 | `DISTRIBUTE_*` | no | Split policy (batch by default) |
 | `WHATSAPP_*`, `NOTIFY_CHANNEL`, `MERCHANT_WA_ID` | for WhatsApp | Cloud API credentials and where notices go |
 | `FIRECRAWL_API_KEY`, `FX_MXN_PER_USDC` | for catalog import | Firecrawl key and MXN rate |
@@ -125,7 +145,8 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP and business profile checks |
+| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile and multi-store checks |
+| `npm run store:create` | Preview and create a store (id, name, wallet, optional profile) |
 | `npm run store:profile` | Show, preview and save a store's business profile |
 | `npm run typecheck` | TypeScript check |
 | `npm run db:check` | Runs a test order through the store database (catalog, order, payment) |
@@ -134,7 +155,7 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 | `npm run voice:check` | Checks the ElevenLabs configuration |
 | `npm run distribute` | Runs the split policy once (`--force` splits whatever is pending) |
 | `npm run gas:report` | Live gas cost of settling and splitting |
-| `npm run catalog:import -- <url>` / `catalog:apply -- <id>` | Catalog from a web page |
+| `npm run catalog:import -- <url> [--store <id>]` / `catalog:apply -- <id>` | Catalog from a web page |
 
 ## Deploy
 
@@ -143,5 +164,6 @@ The [`Dockerfile`](Dockerfile) builds a production image that runs as an unprivi
 ## Limits
 
 - **Paying needs a browser wallet.** The checkout works with an injected wallet (for example MetaMask or Core on desktop, or the wallet's in-app browser on mobile). Paying from any phone without a wallet is the main item before mainnet.
+- **Store notices go to one number.** Paid-order notices for every store go to `MERCHANT_WA_ID`, with the store name in the message. Each store gets its own contact with the Telegram channel.
 - **One replica.** The settlement lock and rate limits live in the process, so Kanjō runs as a single instance.
 - **Testnet only** for now: orders are paid with Fuji USDC.

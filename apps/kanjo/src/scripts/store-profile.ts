@@ -7,7 +7,7 @@ import { BUSINESS_TYPES, fulfillmentLine, validateProfile, type StoreProfile } f
 //   npm run store:profile -- <tienda>                       → muestra su perfil y qué le falta
 //   npm run store:profile -- <tienda> perfil.json           → VISTA PREVIA: valida y muestra los cambios
 //   npm run store:profile -- <tienda> perfil.json --apply   → guarda (solo si es válido)
-//   npm run store:profile -- --example                      → un perfil de ejemplo para copiar
+//   npm run -s store:profile -- --example > perfil.json     → un perfil de ejemplo para editar (-s: sin el encabezado de npm)
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
@@ -45,7 +45,8 @@ function show(p: StoreProfile): void {
 
 if (args.includes("--example")) {
   console.log(JSON.stringify(EXAMPLE, null, 2));
-  console.log(`\nGiros: ${Object.keys(BUSINESS_TYPES).join(", ")} · entrega: pickup, delivery, both`);
+  // La ayuda va a stderr: así "> perfil.json" guarda solo el JSON
+  console.error(`\nGiros: ${Object.keys(BUSINESS_TYPES).join(", ")} · entrega: pickup, delivery, both`);
   process.exit(0);
 }
 

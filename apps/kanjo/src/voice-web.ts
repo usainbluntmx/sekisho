@@ -2,8 +2,9 @@ import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { handleMessage } from "./bot.js";
 import { enqueue } from "./inbox.js";
+import { clearHistory } from "./memory.js";
 import { rateLimit } from "./security.js";
-import { getStore, listProducts } from "./store.js";
+import { DEFAULT_STORE_ID, getCustomerStore, getStore, listProducts, setCustomerStore, STORE_ID_RE } from "./store.js";
 import { elevenLabsConfigured, synthesizeVoice, transcribeAudio } from "./voice.js";
 import { spokenText } from "./voice-text.js";
 import { renderVoicePage } from "./web/voice-page.js";
@@ -23,14 +24,15 @@ export function voiceWebEnabled(): boolean {
  */
 export function registerVoiceWeb(app: Hono): void {
   if (!voiceWebEnabled()) return;
-  const storeId = process.env.STORE_ID ?? "cafe-kanjo";
 
   app.use(VOICE_API_PATH, rateLimit({ max: Number(process.env.VOICE_WEB_PER_MINUTE ?? 12), windowMs: 60_000 }));
 
+  // /voice?store=<id> (sin parámetro: la tienda por defecto)
   app.get("/voice", (c) => {
-    const store = getStore(storeId);
-    if (!store) return c.text("La tienda aún no está configurada", 503);
-    return c.html(renderVoicePage({ store, products: listProducts(storeId), voice: elevenLabsConfigured() }));
+    const requested = c.req.query("store") ?? DEFAULT_STORE_ID;
+    const store = STORE_ID_RE.test(requested) ? getStore(requested) : undefined;
+    if (!store) return c.text("No encontré esa tienda", 404);
+    return c.html(renderVoicePage({ store, products: listProducts(store.id), voice: elevenLabsConfigured() }));
   });
 
   app.post(
@@ -62,6 +64,11 @@ export function registerVoiceWeb(app: Hono): void {
       if (!text) return c.json({ error: "Habla o escribe algo" }, 400);
 
       const from = `web-${session}`;
+      // La página manda su tienda; la sesión queda ligada a ella
+      const storeId = String(form.get("store") ?? "");
+      if (STORE_ID_RE.test(storeId) && getCustomerStore(from)?.id !== storeId && setCustomerStore(from, storeId)) {
+        clearHistory(from); // la conversación anterior era con otra tienda
+      }
       const replies: string[] = [];
       await enqueue(from, () =>
         handleMessage({ from, name: "Cliente web", type: transcript ? "audio" : "text", text }, async (_to, reply) => {

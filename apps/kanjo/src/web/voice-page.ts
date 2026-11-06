@@ -149,6 +149,7 @@ export function renderVoicePage({ store, products, voice }: { store: Store; prod
 
     async function send(body, label) {
       body.append("session", session);
+      body.append("store", ${JSON.stringify(store.id)});
       body.append("voice", voiceToggle && !voiceToggle.checked ? "0" : "1");
       statusEl.textContent = "Pensando…";
       if (mic) mic.disabled = true;

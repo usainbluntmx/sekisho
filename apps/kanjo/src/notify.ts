@@ -88,7 +88,7 @@ export function enqueueOrderPaid(orderId: string): number {
       enqueueNotification(
         `order-paid:${order.id}:merchant`,
         MERCHANT_WA_ID,
-        `🛒 *Nuevo pedido pagado* · ${order.id}\n\n${lines}\n*Total:* ${total} USDC\n*Cliente:* ${customerLabel(order.customer_wa_id)}\n\nComprobante: ${EXPLORER}/tx/${order.payment_tx}${merchantWarning}`
+        `🛒 *Nuevo pedido pagado* · ${order.id}${store ? ` · ${store.name}` : ""}\n\n${lines}\n*Total:* ${total} USDC\n*Cliente:* ${customerLabel(order.customer_wa_id)}\n\nComprobante: ${EXPLORER}/tx/${order.payment_tx}${merchantWarning}`
       )
     ) {
       queued++;
@@ -105,6 +105,7 @@ export function enqueueDuplicatePayment(orderId: string, paymentTx: string, amou
 
   const { order } = found;
   const amount = formatUsdc(amountAtomic);
+  const store = getStore(order.store_id);
 
   if (!hasNoDirectChannel(order.customer_wa_id)) {
     enqueueNotification(
@@ -118,7 +119,7 @@ export function enqueueDuplicatePayment(orderId: string, paymentTx: string, amou
     enqueueNotification(
       `duplicate:${paymentTx}:merchant`,
       MERCHANT_WA_ID,
-      `⚠️ *Pago duplicado* · ${order.id}\n\nSe recibió otro pago de ${amount} USDC para un pedido ya pagado.\n*Cliente:* ${customerLabel(order.customer_wa_id)}\nReembolsa al cliente.\n\nComprobante: ${EXPLORER}/tx/${paymentTx}`
+      `⚠️ *Pago duplicado* · ${order.id}${store ? ` · ${store.name}` : ""}\n\nSe recibió otro pago de ${amount} USDC para un pedido ya pagado.\n*Cliente:* ${customerLabel(order.customer_wa_id)}\nReembolsa al cliente.\n\nComprobante: ${EXPLORER}/tx/${paymentTx}`
     );
   }
 }

@@ -90,6 +90,11 @@ if (!hasColumn("stores", "profile")) {
   db.exec("ALTER TABLE stores ADD COLUMN profile TEXT NOT NULL DEFAULT '{}'");
 }
 
+// Tienda con la que está hablando cada cliente (un solo bot para muchas tiendas)
+if (!hasColumn("customers", "store_id")) {
+  db.exec("ALTER TABLE customers ADD COLUMN store_id TEXT REFERENCES stores(id)");
+}
+
 // Token secreto del link de pago (128 bits)
 if (!hasColumn("orders", "pay_token")) {
   db.exec("ALTER TABLE orders ADD COLUMN pay_token TEXT");
