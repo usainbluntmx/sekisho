@@ -1,5 +1,5 @@
 import type { Product, Store } from "../store.js";
-import { formatUsdc } from "../money.js";
+import { priceLabel } from "../units.js";
 
 function escapeHtml(value: string): string {
   return value
@@ -29,7 +29,7 @@ function catalogHtml(products: Product[]): string {
               ${p.image_url ? `<img src="${escapeHtml(p.image_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : ""}
               <span class="name">${escapeHtml(p.name)}</span>
               ${p.description ? `<span class="desc">${escapeHtml(p.description)}</span>` : ""}
-              <span class="price">${formatUsdc(p.price_atomic)} USDC${p.stock > 0 ? "" : " · agotado"}</span>
+              <span class="price">${priceLabel(p.price_atomic, p.unit)}${p.stock > 0 ? "" : " · agotado"}</span>
             </button>`
             )
             .join("")}

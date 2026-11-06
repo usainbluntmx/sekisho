@@ -1,6 +1,24 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { createOrder, getOrder, listProducts, type Order } from "./store.js";
+import { createOrder, getOrder, isExpired, lineTotal, listProducts, orderTtlMinutes, type Order, type OrderItem } from "./store.js";
 import { formatUsdc } from "./money.js";
+import { formatQuantity, fromBase } from "./units.js";
+
+/** Línea de pedido para el agente: cantidad como la dice el cliente, unidad e importe. */
+function lineForAgent(l: OrderItem) {
+  return {
+    name: l.name,
+    quantity: fromBase(l.quantity, l.unit),
+    unit: l.unit,
+    ...(l.unit === "kg" ? { weight: formatQuantity(l.quantity, l.unit) } : {}),
+    unit_price_usdc: formatUsdc(l.unit_price_atomic),
+    line_total_usdc: formatUsdc(lineTotal(l)),
+  };
+}
+
+/** Estado para el agente: "expired" en vez de "cancelled" cuando venció sin pagarse. */
+function statusForAgent(order: Order): string {
+  return isExpired(order) ? "expired" : order.status;
+}
 
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ?? "http://localhost:3000";
 
@@ -24,7 +42,8 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "catalog_list",
     description:
-      "Devuelve el catálogo actual de la tienda: id de producto, nombre, descripción, precio en USDC y disponibilidad. " +
+      "Devuelve el catálogo actual de la tienda: id de producto, nombre, descripción, unidad (pieza o kg), precio en USDC y disponibilidad. " +
+      "Si unit es \"kg\", el precio es por kilo y stock está en kg. " +
       "Úsala siempre antes de mencionar productos o precios, y cuando el cliente pregunte qué hay, cuánto cuesta algo o si hay existencias. " +
       "Nunca inventes productos ni precios: usa únicamente lo que devuelve esta herramienta.",
     input_schema: { type: "object", properties: {} },
@@ -34,6 +53,7 @@ export const TOOLS: Anthropic.Tool[] = [
     description:
       "Crea un pedido pendiente de pago para el cliente actual y devuelve el id del pedido, el detalle, el total en USDC y el link de pago. " +
       "Úsala solo cuando el cliente ya confirmó explícitamente los productos y cantidades (por ejemplo, 'sí', 'confirmo', 'así está bien'). " +
+      "El link de pago vence (expires_in_minutes); si vence, se arma un pedido nuevo. " +
       "Los product_id deben venir de catalog_list. Si devuelve un error (por ejemplo, falta de stock), explícaselo al cliente y propón una alternativa.",
     input_schema: {
       type: "object",
@@ -46,7 +66,12 @@ export const TOOLS: Anthropic.Tool[] = [
             type: "object",
             properties: {
               product_id: { type: "integer", description: "Id del producto según catalog_list." },
-              quantity: { type: "integer", minimum: 1, description: "Cantidad de unidades." },
+              quantity: {
+                type: "number",
+                exclusiveMinimum: 0,
+                description:
+                  "Productos por pieza: número entero de piezas. Productos por kg: kilos con hasta 3 decimales (medio kilo = 0.5, 250 gramos = 0.25, kilo y medio = 1.5; mínimo 0.05).",
+              },
             },
             required: ["product_id", "quantity"],
           },
@@ -59,7 +84,7 @@ export const TOOLS: Anthropic.Tool[] = [
     name: "order_status",
     description:
       "Consulta el estado de un pedido del cliente actual por su id (por ejemplo, '09D37429'). " +
-      "Devuelve el estado (pending_payment, paid o cancelled), el detalle y el total. " +
+      "Devuelve el estado (pending_payment, paid, expired o cancelled), el detalle y el total. expired = venció sin pagarse. " +
       "Úsala cuando el cliente pregunte por su pedido o su pago. Solo funciona con pedidos de este mismo cliente.",
     input_schema: {
       type: "object",
@@ -80,9 +105,11 @@ export function executeTool(name: string, input: unknown, ctx: ToolContext): Too
           name: p.name,
           description: p.description,
           ...(p.category ? { category: p.category } : {}),
+          unit: p.unit,
           price_usdc: formatUsdc(p.price_atomic),
+          ...(p.unit === "kg" ? { price_per: "kg" } : {}),
           available: p.stock > 0,
-          stock: p.stock,
+          stock: fromBase(p.stock, p.unit),
         }));
         return { content: JSON.stringify(products) };
       }
@@ -98,13 +125,10 @@ export function executeTool(name: string, input: unknown, ctx: ToolContext): Too
           content: JSON.stringify({
             order_id: order.id,
             status: order.status,
-            items: lines.map((l) => ({
-              name: l.name,
-              quantity: l.quantity,
-              unit_price_usdc: formatUsdc(l.unit_price_atomic),
-            })),
+            items: lines.map(lineForAgent),
             total_usdc: formatUsdc(order.total_atomic),
             payment_url: paymentUrl(order),
+            expires_in_minutes: orderTtlMinutes(),
           }),
         };
       }
@@ -118,11 +142,11 @@ export function executeTool(name: string, input: unknown, ctx: ToolContext): Too
         return {
           content: JSON.stringify({
             order_id: found.order.id,
-            status: found.order.status,
+            status: statusForAgent(found.order),
             total_usdc: formatUsdc(found.order.total_atomic),
-            items: found.items.map((l) => ({ name: l.name, quantity: l.quantity })),
+            items: found.items.map(lineForAgent),
             paid_at: found.order.paid_at,
-            payment_url: found.order.status === "pending_payment" ? paymentUrl(found.order) : undefined,
+            payment_url: statusForAgent(found.order) === "pending_payment" ? paymentUrl(found.order) : undefined,
           }),
         };
       }

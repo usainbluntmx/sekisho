@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { getAddress, isAddress, zeroAddress } from "viem";
 import { parseStoredProfile, validateProfile, type StoreProfile } from "./store-profile.js";
 import { db } from "./db.js";
+import { lineTotalAtomic, toBase, type Unit } from "./units.js";
 
 export interface Store {
   id: string;
@@ -19,9 +20,12 @@ export interface Product {
   store_id: string;
   name: string;
   description: string;
+  /** Precio por pieza, o por kg si `unit` es "kg". */
   price_atomic: number;
+  /** Piezas, o gramos si `unit` es "kg". */
   stock: number;
   active: number;
+  unit: Unit;
   /** Sección del menú (vacía si no se importó). */
   category: string;
   image_url: string | null;
@@ -40,6 +44,10 @@ export interface Order {
   stock_issue: string | null;
   /** Token secreto del link de pago. */
   pay_token: string | null;
+  /** Vencimiento del pedido sin pagar (UTC, "YYYY-MM-DD HH:MM:SS"). Null en pedidos viejos. */
+  expires_at: string | null;
+  /** "expired" si se canceló por no pagarse a tiempo. */
+  cancel_reason: string | null;
 }
 
 export interface OrderItem {
@@ -47,18 +55,23 @@ export interface OrderItem {
   product_id: number;
   name: string;
   unit_price_atomic: number;
+  /** Piezas, o gramos si `unit` es "kg". */
   quantity: number;
+  unit: Unit;
 }
 
 export interface OrderItemInput {
   productId: number;
+  /** Como lo dice el cliente: piezas, o kg con decimales (0.5 = medio kilo). */
   quantity: number;
 }
 
 export interface StockShortage {
   name: string;
+  /** En unidades base (piezas o gramos). */
   requested: number;
   available: number;
+  unit: Unit;
 }
 
 export interface MarkPaidResult {
@@ -209,7 +222,30 @@ export function getOrder(orderId: string): { order: Order; items: OrderItem[] } 
   return { order, items };
 }
 
-/** Crea un pedido pendiente de pago. Valida productos, cantidades y stock. */
+/** Minutos que dura un pedido sin pagar antes de vencer (ORDER_TTL_MINUTES, por defecto 60). */
+export function orderTtlMinutes(): number {
+  const value = Number(process.env.ORDER_TTL_MINUTES ?? 60);
+  return Number.isInteger(value) && value >= 5 && value <= 10_080 ? value : 60;
+}
+
+/** Hora de vencimiento de un pedido en milisegundos, o null si no tiene. */
+export function expiresAtMs(order: Pick<Order, "expires_at">): number | null {
+  return order.expires_at ? Date.parse(`${order.expires_at.replace(" ", "T")}Z`) : null;
+}
+
+/** true si el pedido venció: ya cancelado por vencimiento, o pendiente con su hora ya pasada. */
+export function isExpired(order: Order, now = Date.now()): boolean {
+  if (order.status === "cancelled") return order.cancel_reason === "expired";
+  const at = expiresAtMs(order);
+  return order.status === "pending_payment" && at !== null && at <= now;
+}
+
+/** Importe de una línea del pedido (por kilo, redondeado al centavo). */
+export function lineTotal(item: Pick<OrderItem, "unit_price_atomic" | "quantity" | "unit">): number {
+  return lineTotalAtomic(item.unit_price_atomic, item.quantity, item.unit);
+}
+
+/** Crea un pedido pendiente de pago. Valida productos, cantidades (piezas o kg) y stock. */
 export function createOrder(
   storeId: string,
   customerWaId: string,
@@ -226,40 +262,45 @@ export function createOrder(
     const requestedByProduct = new Map<number, number>();
 
     for (const input of inputs) {
-      if (!Number.isInteger(input.quantity) || input.quantity <= 0) {
-        throw new Error("Cantidad inválida");
-      }
       const product = getProduct(storeId, input.productId);
       if (!product) throw new Error(`El producto ${input.productId} no existe`);
+      let quantity: number;
+      try {
+        quantity = toBase(input.quantity, product.unit);
+      } catch (error) {
+        throw new Error(`${product.name}: ${(error as Error).message}`);
+      }
 
       // Suma por producto (por si el mismo producto viene en varias líneas)
-      const requested = (requestedByProduct.get(product.id) ?? 0) + input.quantity;
+      const requested = (requestedByProduct.get(product.id) ?? 0) + quantity;
       if (product.stock < requested) {
         throw new Error(`No hay suficiente stock de ${product.name}`);
       }
       requestedByProduct.set(product.id, requested);
 
-      total += product.price_atomic * input.quantity;
-      lines.push({
+      const line: OrderItem = {
         order_id: orderId,
         product_id: product.id,
         name: product.name,
         unit_price_atomic: product.price_atomic,
-        quantity: input.quantity,
-      });
+        quantity,
+        unit: product.unit,
+      };
+      total += lineTotal(line);
+      lines.push(line);
     }
 
     db.prepare(
-      `INSERT INTO orders (id, store_id, customer_wa_id, status, total_atomic, pay_token)
-       VALUES (?, ?, ?, 'pending_payment', ?, ?)`
-    ).run(orderId, storeId, customerWaId, total, randomBytes(16).toString("base64url"));
+      `INSERT INTO orders (id, store_id, customer_wa_id, status, total_atomic, pay_token, expires_at)
+       VALUES (?, ?, ?, 'pending_payment', ?, ?, datetime('now', ?))`
+    ).run(orderId, storeId, customerWaId, total, randomBytes(16).toString("base64url"), `+${orderTtlMinutes()} minutes`);
 
     const insertItem = db.prepare(
-      `INSERT INTO order_items (order_id, product_id, name, unit_price_atomic, quantity)
-       VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO order_items (order_id, product_id, name, unit_price_atomic, quantity, unit)
+       VALUES (?, ?, ?, ?, ?, ?)`
     );
     for (const l of lines) {
-      insertItem.run(l.order_id, l.product_id, l.name, l.unit_price_atomic, l.quantity);
+      insertItem.run(l.order_id, l.product_id, l.name, l.unit_price_atomic, l.quantity, l.unit);
     }
 
     db.exec("COMMIT");
@@ -275,7 +316,7 @@ export function createOrder(
 export function getStockShortages(orderId: string): StockShortage[] {
   return db
     .prepare(
-      `SELECT p.name AS name, SUM(oi.quantity) AS requested, p.stock AS available
+      `SELECT p.name AS name, SUM(oi.quantity) AS requested, p.stock AS available, p.unit AS unit
        FROM order_items oi
        JOIN products p ON p.id = oi.product_id
        WHERE oi.order_id = ?
@@ -286,7 +327,32 @@ export function getStockShortages(orderId: string): StockShortage[] {
 }
 
 /**
+ * Cancela los pedidos sin pagar cuya hora ya pasó (los viejos sin expires_at usan created_at + ORDER_TTL_MINUTES).
+ * `skip` deja fuera los que tienen un pago en curso. Devuelve los ids vencidos.
+ * No hay stock que devolver: el stock solo se descuenta al pagar.
+ */
+export function expireOrders(skip: (orderId: string) => boolean = () => false): string[] {
+  const due = db
+    .prepare(
+      `SELECT id FROM orders
+       WHERE status = 'pending_payment'
+         AND COALESCE(expires_at, datetime(created_at, ?)) <= datetime('now')`
+    )
+    .all(`+${orderTtlMinutes()} minutes`) as { id: string }[];
+  const cancel = db.prepare(
+    "UPDATE orders SET status = 'cancelled', cancel_reason = 'expired' WHERE id = ? AND status = 'pending_payment'"
+  );
+  const expired: string[] = [];
+  for (const { id } of due) {
+    if (skip(id)) continue;
+    if (Number(cancel.run(id).changes) > 0) expired.push(id);
+  }
+  return expired;
+}
+
+/**
  * Marca un pedido como pagado y descuenta stock.
+ * También acepta un pedido que venció mientras su pago se liquidaba: el dinero ya se movió, así que se honra.
  * Se llama DESPUÉS de que el pago ya se liquidó on-chain, así que nunca debe
  * fallar por stock: si falta, el stock baja hasta 0 y el pedido queda marcado
  * con `stock_issue` para que la tienda lo resuelva (cambio o reembolso).
@@ -296,8 +362,8 @@ export function markOrderPaid(orderId: string, paymentTx: string): MarkPaidResul
   try {
     const result = db
       .prepare(
-        `UPDATE orders SET status = 'paid', payment_tx = ?, paid_at = datetime('now')
-         WHERE id = ? AND status = 'pending_payment'`
+        `UPDATE orders SET status = 'paid', payment_tx = ?, paid_at = datetime('now'), cancel_reason = NULL
+         WHERE id = ? AND (status = 'pending_payment' OR (status = 'cancelled' AND cancel_reason = 'expired'))`
       )
       .run(paymentTx, orderId);
 

@@ -10,6 +10,7 @@ const mode = flags.includes("--replace") ? "replace" : "merge";
 try {
   const result = applyCatalog(id, mode);
   console.log(`✔ Import ${id.toUpperCase()} aplicado (${mode}): ${result.added} nuevos, ${result.updated} actualizados, ${result.deactivated} desactivados`);
+  if (result.unitChanged.length) console.log(`⚠️ Cambiaron de unidad (pieza ↔ kg) y su stock se reinició: ${result.unitChanged.join(", ")}`);
 } catch (error) {
   console.error(`✘ ${(error as Error).message}`);
   process.exit(1);

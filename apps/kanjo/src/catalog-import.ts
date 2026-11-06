@@ -41,6 +41,7 @@ interface ExistingProduct {
   name: string;
   description: string;
   price_atomic: number;
+  unit: "pieza" | "kg";
   category: string | null;
   image_url: string | null;
 }
@@ -48,7 +49,7 @@ interface ExistingProduct {
 function activeProducts(storeId: string): ExistingProduct[] {
   return db
     .prepare(
-      "SELECT id, name, description, price_atomic, category, image_url FROM products WHERE store_id = ? AND active = 1"
+      "SELECT id, name, description, price_atomic, unit, category, image_url FROM products WHERE store_id = ? AND active = 1"
     )
     .all(storeId) as unknown as ExistingProduct[];
 }
@@ -67,6 +68,7 @@ export function diffAgainstStore(storeId: string, items: CatalogItem[]): Catalog
     if (!found) added++;
     else if (
       found.price_atomic !== item.price_atomic ||
+      found.unit !== (item.unit ?? "pieza") ||
       found.description !== item.description ||
       (found.category ?? "") !== item.category ||
       (found.image_url ?? null) !== item.image_url
@@ -134,7 +136,10 @@ export async function previewCatalog(storeId: string, url: string): Promise<Cata
 }
 
 /** Paso 2: aplica un preview. Idempotente: un import ya aplicado no se repite. */
-export function applyCatalog(importId: string, mode: "merge" | "replace" = "merge"): { added: number; updated: number; deactivated: number } {
+export function applyCatalog(
+  importId: string,
+  mode: "merge" | "replace" = "merge"
+): { added: number; updated: number; deactivated: number; unitChanged: string[] } {
   const row = db
     .prepare("SELECT id, store_id, payload FROM catalog_imports WHERE id = ? AND status = 'preview'")
     .get(importId.toUpperCase()) as unknown as { id: string; store_id: string; payload: string } | undefined;
@@ -143,7 +148,10 @@ export function applyCatalog(importId: string, mode: "merge" | "replace" = "merg
   const { items } = JSON.parse(row.payload) as { items: CatalogItem[] };
   const existing = activeProducts(row.store_id);
   const current = new Map(existing.map((p) => [normalizeName(p.name), p]));
+  // Existencias iniciales: CATALOG_DEFAULT_STOCK piezas, o ese mismo número de kg (guardado en gramos)
   const stock = Number(process.env.CATALOG_DEFAULT_STOCK ?? 20);
+  const stockFor = (unit: "pieza" | "kg") => (unit === "kg" ? stock * 1000 : stock);
+  const unitChanged: string[] = [];
 
   let added = 0;
   let updated = 0;
@@ -151,18 +159,25 @@ export function applyCatalog(importId: string, mode: "merge" | "replace" = "merg
   db.exec("BEGIN");
   try {
     const insert = db.prepare(
-      "INSERT INTO products (store_id, name, description, price_atomic, stock, category, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO products (store_id, name, description, price_atomic, unit, stock, category, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     );
     const update = db.prepare(
       "UPDATE products SET name = ?, description = ?, price_atomic = ?, category = ?, image_url = ? WHERE id = ?"
     );
+    // Si cambia la unidad, el stock anterior ya no significa lo mismo (piezas ≠ gramos): se reinicia
+    const changeUnit = db.prepare("UPDATE products SET unit = ?, stock = ? WHERE id = ?");
     for (const item of items) {
+      const unit = item.unit ?? "pieza"; // importaciones guardadas antes de existir la unidad
       const found = current.get(normalizeName(item.name));
       if (found) {
         update.run(item.name, item.description, item.price_atomic, item.category, item.image_url, found.id);
+        if (found.unit !== unit) {
+          changeUnit.run(unit, stockFor(unit), found.id);
+          unitChanged.push(item.name);
+        }
         updated++;
       } else {
-        insert.run(row.store_id, item.name, item.description, item.price_atomic, stock, item.category, item.image_url);
+        insert.run(row.store_id, item.name, item.description, item.price_atomic, unit, stockFor(unit), item.category, item.image_url);
         added++;
       }
     }
@@ -184,5 +199,5 @@ export function applyCatalog(importId: string, mode: "merge" | "replace" = "merg
     db.exec("ROLLBACK");
     throw error;
   }
-  return { added, updated, deactivated };
+  return { added, updated, deactivated, unitChanged };
 }

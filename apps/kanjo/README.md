@@ -84,6 +84,8 @@ In the Docker image the same tools are `node dist/scripts/store-profile.js` and 
 ## Features
 
 - **Catalog from any URL with [Firecrawl](https://firecrawl.dev):** `npm run catalog:import -- <url>` extracts products, prices, sections and photos into a preview with a diff against the store; `npm run catalog:apply -- <id>` writes it (merge or replace). Prices in MXN are converted with `FX_MXN_PER_USDC` and rounded to cents. Demo menu: [`/demo/menu.html`](https://sekisho.zerotwolabs.xyz/demo/menu.html).
+- **Sale by piece or by weight:** each product is sold by `pieza` or by `kg`. For `kg` products the price is per kilo and the customer asks in kilos with up to 3 decimals ("medio kilo" = 0.5, minimum 50 g, maximum 100 kg per line). Weight and stock are stored in whole grams, and each line is rounded to the cent, so the line amounts the agent says add up to exactly what is charged. The catalog import detects prices per kilo (`unit: kg`).
+- **Unpaid orders expire** after `ORDER_TTL_MINUTES` (60 by default). An expired payment link no longer charges, and the agent offers to place the order again. An order with a payment in progress is never expired, and if its payment settled on-chain anyway, the order is still marked paid: a charge is never lost. Stock is only taken when an order is paid, so expiring returns nothing.
 - **Voice with [ElevenLabs](https://elevenlabs.io):** speech-to-text for incoming voice notes and spoken replies (Ogg/Opus voice notes on WhatsApp, MP3 on the web). Spoken replies drop links, ids and formatting and read amounts out loud; a reply with a payment link always goes as text.
 - **Safety:**
   - no overselling: stock is checked before charging, and a paid order without stock is flagged, never lost;
@@ -99,9 +101,9 @@ With `MCP_CHANNEL=on`, Kanjō serves an MCP endpoint at `/mcp` (Streamable HTTP)
 | Tool | Cost | What it does |
 | --- | --- | --- |
 | `stores` | free | Stores you can buy from |
-| `menu` | free | Products of a store: id, price in USDC, available stock |
-| `place_order` | free | Creates an unpaid order and returns `order_id`, `token` and the total |
-| `order_status` | free | Status of an order and its payment transaction |
+| `menu` | free | Products of a store: id, unit (`pieza` or `kg`), price in USDC (per kilo for `kg`), available stock |
+| `place_order` | free | Creates an unpaid order and returns `order_id`, `token`, the total and `expires_at`. Quantities are whole pieces, or kilos with decimals for `kg` products |
+| `order_status` | free | Status of an order (`pending_payment`, `paid`, `expired`) and its payment transaction |
 | `pay_order` | **the order total** | Charges exactly the total with x402 into the store's SplitVault and marks the order paid |
 
 `stores` and `menu` include the store's business profile (hours, pickup or delivery, prep time), and `pay_order` answers with the pickup or delivery line, so the agent does not promise what the store does not offer. `pay_order` uses the same checks as the web checkout: valid token, order still pending, stock available, one settlement at a time, and one payment row per transaction. A second payment is refused before it is charged. Orders placed by agents never trigger customer messages; the store still gets its notice. At most `MCP_MAX_PENDING` unpaid agent orders exist at once (default 20), and `/mcp` is rate limited per IP (`MCP_PER_MINUTE`, default 60).
@@ -140,12 +142,13 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 | `FIRECRAWL_API_KEY`, `FX_MXN_PER_USDC` | for catalog import | Firecrawl key and MXN rate |
 | `ELEVENLABS_*`, `VOICE_WEB`, `VOICE_REPLIES` | for voice | ElevenLabs key and voice, and which channels speak |
 | `MCP_CHANNEL`, `MCP_MAX_PENDING`, `MCP_PER_MINUTE` | for agents | Turns on `/mcp` and its limits |
+| `ORDER_TTL_MINUTES` | no | Minutes an unpaid order lasts (5 to 10080, default 60) |
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile and multi-store checks |
+| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store and weight/expiry checks |
 | `npm run store:create` | Preview and create a store (id, name, wallet, optional profile) |
 | `npm run store:profile` | Show, preview and save a store's business profile |
 | `npm run typecheck` | TypeScript check |

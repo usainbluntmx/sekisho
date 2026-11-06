@@ -1,4 +1,5 @@
-import type { Order, OrderItem, Store } from "../store.js";
+import { isExpired, lineTotal, type Order, type OrderItem, type Store } from "../store.js";
+import { itemLabel } from "../units.js";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { formatUsdc } from "../money.js";
@@ -65,7 +66,7 @@ export function renderCheckoutPage({ store, order, items, usdc, chainId, explore
   const rows = items
     .map(
       (i) =>
-        `<tr><td>${i.quantity} × ${escapeHtml(i.name)}</td><td>${formatUsdc(i.unit_price_atomic * i.quantity)} USDC</td></tr>`
+        `<tr><td>${escapeHtml(itemLabel(i.name, i.quantity, i.unit))}</td><td>${formatUsdc(lineTotal(i))} USDC</td></tr>`
     )
     .join("");
 
@@ -74,7 +75,9 @@ export function renderCheckoutPage({ store, order, items, usdc, chainId, explore
   const action = paid
     ? `<p>✅ Este pedido ya está pagado.</p>
        ${order.payment_tx ? `<p class="muted"><a href="${explorer}/tx/${order.payment_tx}" target="_blank">Ver transacción</a></p>` : ""}`
-    : order.status === "cancelled"
+    : isExpired(order)
+      ? `<p>⏰ Este pedido venció sin pagarse. Pide al asistente que lo arme de nuevo.</p>`
+      : order.status === "cancelled"
       ? `<p>Este pedido fue cancelado.</p>`
       : `<button id="pay-button">Pagar ${formatUsdc(order.total_atomic)} USDC</button>
           <div id="no-wallet" class="no-wallet" hidden>

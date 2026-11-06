@@ -95,6 +95,22 @@ if (!hasColumn("customers", "store_id")) {
   db.exec("ALTER TABLE customers ADD COLUMN store_id TEXT REFERENCES stores(id)");
 }
 
+// Venta por pieza o por kilo. En productos por kg, stock y cantidades van en GRAMOS (enteros)
+if (!hasColumn("products", "unit")) {
+  db.exec("ALTER TABLE products ADD COLUMN unit TEXT NOT NULL DEFAULT 'pieza' CHECK (unit IN ('pieza', 'kg'))");
+}
+if (!hasColumn("order_items", "unit")) {
+  db.exec("ALTER TABLE order_items ADD COLUMN unit TEXT NOT NULL DEFAULT 'pieza' CHECK (unit IN ('pieza', 'kg'))");
+}
+
+// Caducidad de pedidos sin pagar: hora de vencimiento (UTC, formato de SQLite) y motivo de cancelación
+if (!hasColumn("orders", "expires_at")) {
+  db.exec("ALTER TABLE orders ADD COLUMN expires_at TEXT");
+}
+if (!hasColumn("orders", "cancel_reason")) {
+  db.exec("ALTER TABLE orders ADD COLUMN cancel_reason TEXT");
+}
+
 // Token secreto del link de pago (128 bits)
 if (!hasColumn("orders", "pay_token")) {
   db.exec("ALTER TABLE orders ADD COLUMN pay_token TEXT");

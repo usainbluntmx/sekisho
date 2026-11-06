@@ -56,6 +56,14 @@ if (env.MCP_CHANNEL && !["on", "off"].includes(env.MCP_CHANNEL)) problems.push('
 positiveNumber("MCP_MAX_PENDING");
 positiveNumber("MCP_PER_MINUTE");
 
+// Caducidad de pedidos sin pagar: minutos enteros entre 5 y 10080 (7 días)
+if (env.ORDER_TTL_MINUTES) {
+  const ttl = Number(env.ORDER_TTL_MINUTES);
+  if (!Number.isInteger(ttl) || ttl < 5 || ttl > 10_080) {
+    problems.push("ORDER_TTL_MINUTES: debe ser un número entero de minutos entre 5 y 10080");
+  }
+}
+
 for (const name of ["VOICE_REPLIES", "VOICE_WEB"]) {
   if (env[name] && !["on", "off"].includes(env[name]!)) problems.push(`${name}: debe ser "on" u "off"`);
 }

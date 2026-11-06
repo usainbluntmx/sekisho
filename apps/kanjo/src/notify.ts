@@ -3,6 +3,7 @@ import { fulfillmentLine } from "./store-profile.js";
 import { db } from "./db.js";
 import { getOrder, getStore, type StockShortage } from "./store.js";
 import { formatUsdc } from "./money.js";
+import { formatQuantity, itemLabel } from "./units.js";
 import { enqueueNotification } from "./outbox.js";
 
 const MERCHANT_WA_ID = process.env.MERCHANT_WA_ID ?? "";
@@ -54,7 +55,7 @@ export function enqueueOrderPaid(orderId: string): number {
   const { order, items } = found;
   const store = getStore(order.store_id);
   const shortages = parseShortages(order.stock_issue);
-  const lines = items.map((i) => `• ${i.quantity} × ${i.name}`).join("\n");
+  const lines = items.map((i) => `• ${itemLabel(i.name, i.quantity, i.unit)}`).join("\n");
   const total = formatUsdc(order.total_atomic);
   let queued = 0;
 
@@ -80,7 +81,7 @@ export function enqueueOrderPaid(orderId: string): number {
     const merchantWarning =
       shortages.length > 0
         ? `\n\n⚠️ *Atención: pagado sin stock suficiente*\n${shortages
-            .map((s) => `• ${s.name}: pidió ${s.requested}, quedaban ${s.available}`)
+            .map((s) => `• ${s.name}: pidió ${formatQuantity(s.requested, s.unit ?? "pieza")}, quedaban ${formatQuantity(s.available, s.unit ?? "pieza")}`)
             .join("\n")}\nContacta al cliente para un cambio o reembolso.`
         : "";
 

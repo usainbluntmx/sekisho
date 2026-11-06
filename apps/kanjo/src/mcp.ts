@@ -18,7 +18,17 @@ import { toFacilitatorClient } from "@zero-two-labs/sekisho";
 import { z } from "zod";
 import { formatUsdc } from "./money.js";
 import { endSettlement } from "./settlement-guard.js";
-import { countPendingOrders, createOrder, getOrder, getStore, listProducts, listStores, upsertCustomer } from "./store.js";
+import { countPendingOrders, createOrder, getOrder, getStore, isExpired, lineTotal, listProducts, listStores, upsertCustomer, type OrderItem } from "./store.js";
+import { formatQuantity, fromBase } from "./units.js";
+
+const lineForAgent = (l: OrderItem) => ({
+  name: l.name,
+  quantity: fromBase(l.quantity, l.unit),
+  unit: l.unit,
+  ...(l.unit === "kg" ? { weight: formatQuantity(l.quantity, l.unit) } : {}),
+  unit_price_usdc: formatUsdc(l.unit_price_atomic),
+  line_total_usdc: formatUsdc(lineTotal(l)),
+});
 import { blockReason, claimForSettlement, quoteFor, recordSettledOrder } from "./order-payment.js";
 import { BUSINESS_TYPES, FULFILLMENT, fulfillmentLine, type StoreProfile } from "./store-profile.js";
 import type { UsdcQuoteDetails } from "./payments/usdc-sekisho.js";
@@ -146,7 +156,7 @@ export async function createKanjoMcp(options: McpOptions) {
 
     server.tool(
       "menu",
-      "Free. Store info (hours, pickup or delivery, prep time) and its products with id, price in USDC and stock. Only state what is here.",
+      "Free. Store info (hours, pickup or delivery, prep time) and its products with id, unit (pieza or kg), price in USDC and stock. When unit is kg, price_usdc is per kg and available is in kg. Only state what is here.",
       { store_id: z.string().min(1).max(64) },
       async ({ store_id }) => {
         const store = getStore(store_id);
@@ -159,8 +169,9 @@ export async function createKanjoMcp(options: McpOptions) {
             name: p.name,
             description: p.description || undefined,
             category: p.category || undefined,
+            unit: p.unit,
             price_usdc: formatUsdc(p.price_atomic),
-            available: p.stock,
+            available: fromBase(p.stock, p.unit),
           })),
         });
       }
@@ -168,11 +179,11 @@ export async function createKanjoMcp(options: McpOptions) {
 
     server.tool(
       "place_order",
-      "Free. Creates an order (not paid yet) and returns order_id, token and total. Then call pay_order to pay it.",
+      "Free. Creates an order (not paid yet) and returns order_id, token, total and expires_at. quantity: whole pieces, or kg with up to 3 decimals for kg products (0.5 = 500 g, min 0.05). Then call pay_order before it expires.",
       {
         store_id: z.string().min(1).max(64),
         items: z
-          .array(z.object({ product_id: z.number().int().positive(), quantity: z.number().int().positive().max(100) }))
+          .array(z.object({ product_id: z.number().int().positive(), quantity: z.number().positive().max(100) }))
           .min(1)
           .max(30),
       },
@@ -193,8 +204,9 @@ export async function createKanjoMcp(options: McpOptions) {
             order_id: order.id,
             token: order.pay_token,
             store: store.name,
-            items: lines.map((l) => ({ name: l.name, quantity: l.quantity, unit_price_usdc: formatUsdc(l.unit_price_atomic) })),
+            items: lines.map(lineForAgent),
             total_usdc: formatUsdc(order.total_atomic),
+            expires_at: order.expires_at ? `${order.expires_at.replace(" ", "T")}Z` : undefined,
             next: "Call pay_order with order_id and token. It charges exactly total_usdc in USDC (x402).",
           });
         } catch (error) {
@@ -205,7 +217,7 @@ export async function createKanjoMcp(options: McpOptions) {
 
     server.tool(
       "order_status",
-      "Free. Status of an order (pending_payment, paid or cancelled).",
+      "Free. Status of an order (pending_payment, paid, expired or cancelled). expired = not paid in time; place a new order.",
       { order_id: z.string().min(1).max(32), token: z.string().min(1).max(64) },
       async ({ order_id, token }) => {
         const orderId = order_id.trim().toUpperCase();
@@ -214,7 +226,8 @@ export async function createKanjoMcp(options: McpOptions) {
         if (!found || blocked?.status === 404) return fail("Pedido no encontrado.");
         return text({
           order_id: orderId,
-          status: found.order.status,
+          status: isExpired(found.order) ? "expired" : found.order.status,
+          items: found.items.map(lineForAgent),
           total_usdc: formatUsdc(found.order.total_atomic),
           payment_tx: found.order.payment_tx ?? undefined,
         });

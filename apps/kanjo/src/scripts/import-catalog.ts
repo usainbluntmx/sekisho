@@ -1,6 +1,6 @@
 import { DEFAULT_STORE_ID, getStore } from "../store.js";
 import { applyCatalog, previewCatalog } from "../catalog-import.js";
-import { formatUsdc } from "../money.js";
+import { priceLabel } from "../units.js";
 
 // Uso: npm run catalog:import -- <url> [--store <id>] [--apply] [--replace]
 const argv = process.argv.slice(2);
@@ -28,7 +28,7 @@ for (const item of preview.items.slice(0, 30)) {
     category = item.category;
     console.log(`  ${category || "(sin sección)"}`);
   }
-  console.log(`    ${formatUsdc(item.price_atomic).padStart(7)} USDC  ${item.name}${item.image_url ? "  🖼" : ""}`);
+  console.log(`    ${priceLabel(item.price_atomic, item.unit).padStart(15)}  ${item.name}${item.image_url ? "  🖼" : ""}`);
 }
 if (preview.items.length > 30) console.log(`    … y ${preview.items.length - 30} más`);
 console.log(
@@ -44,6 +44,7 @@ if (flags.includes("--apply")) {
   const mode = flags.includes("--replace") ? "replace" : "merge";
   const result = applyCatalog(preview.id, mode);
   console.log(`\n✔ Aplicado (${mode}): ${result.added} nuevos, ${result.updated} actualizados, ${result.deactivated} desactivados`);
+  if (result.unitChanged.length) console.log(`⚠️ Cambiaron de unidad (pieza ↔ kg) y su stock se reinició: ${result.unitChanged.join(", ")}`);
 } else {
   console.log(`\nVista previa guardada; la base no cambió. Aplica con: npm run catalog:apply -- ${preview.id}`);
 }

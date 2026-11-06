@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { TOOLS, executeTool } from "./tools.js";
 import { getHistory, saveExchange } from "./memory.js";
-import type { Store } from "./store.js";
+import { orderTtlMinutes, type Store } from "./store.js";
 import { BUSINESS_TYPES, profileForPrompt } from "./store-profile.js";
 
 const client = new Anthropic(); // lee ANTHROPIC_API_KEY del entorno
@@ -32,9 +32,12 @@ Reglas:
 - Lo que dijiste en mensajes anteriores ya fue verificado con herramientas en su momento. No te disculpes ni lo comentes; si necesitas datos actualizados, consúltalos en silencio.
 - Los precios están en USDC.
 - Interpreta "un", "una" o un producto sin cantidad como 1 unidad; no preguntes la cantidad si ya es clara.
+- Productos con unit "kg": el precio es por kilo y la cantidad va en kilos con decimales ("medio kilo" = 0.5, "250 gramos" = 0.25, "kilo y medio" = 1.5; mínimo 0.05). Si el cliente pide uno de estos sin decir cuánto, pregúntale cuántos kilos o gramos. Al resumir, di el peso y el importe de esa línea.
+- El cliente paga el peso que pidió; no prometas un peso exacto distinto ni ajustes después del pago.
 - En el mismo turno en que uses order_create, llama antes a catalog_list para obtener los product_id reales.
 - Antes de crear un pedido, resume productos, cantidades y total, y pide confirmación explícita. Solo después usa order_create.
-- Al crear el pedido, comparte el id del pedido, el total y el link de pago (payment_url) tal cual.
+- Al crear el pedido, comparte el id del pedido, el total y el link de pago (payment_url) tal cual, y avisa que el link vence en ${orderTtlMinutes()} minutos.
+- Si un pedido aparece como expired, venció sin pagarse: ofrece armarlo de nuevo (revisa catalog_list otra vez por si cambió el precio o el stock).
 - Cuando el pago se confirma, el cliente recibe un aviso automático; no necesitas prometer nada más.
 - Responde solo lo que el cliente pidió. No ofrezcas productos adicionales a menos que el cliente pregunte o pida recomendaciones.
 - Si una herramienta devuelve un error, explícalo en palabras simples y ofrece una alternativa.

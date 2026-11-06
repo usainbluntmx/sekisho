@@ -57,8 +57,8 @@ db.prepare("INSERT INTO stores (id, name, merchant_address) VALUES ('t', 'Test',
 db.prepare("INSERT INTO products (store_id, name, price_atomic, stock) VALUES ('t', 'Latte', 2000000, 5)").run();
 db.prepare("INSERT INTO products (store_id, name, price_atomic, stock) VALUES ('t', 'Viejo', 1000000, 5)").run();
 const items = [
-  { name: "latte", description: "12 oz", price_atomic: 2_500_000, category: "Bebidas", image_url: null },
-  { name: "Croissant", description: "", price_atomic: 1_500_000, category: "Pan", image_url: "https://menu.example/c.jpg" },
+  { name: "latte", description: "12 oz", price_atomic: 2_500_000, unit: "pieza" as const, category: "Bebidas", image_url: null },
+  { name: "Croissant", description: "", price_atomic: 1_500_000, unit: "pieza" as const, category: "Pan", image_url: "https://menu.example/c.jpg" },
 ];
 const diff = diffAgainstStore("t", items);
 check("Diff: 1 nuevo, 1 actualizado, 1 fuera", diff.added === 1 && diff.updated === 1 && diff.removed === 1);

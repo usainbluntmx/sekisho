@@ -6,6 +6,7 @@ import {
   getOrder,
   getStockShortages,
   getStore,
+  isExpired,
   markOrderPaid,
   recordPayment,
   type PaymentRecord,
@@ -17,6 +18,10 @@ import { processOutbox } from "./outbox.js";
 import { isSettling, tryStartSettlement } from "./settlement-guard.js";
 import { safeEqual } from "./security.js";
 import { checkAfterPayment } from "./distributor.js";
+import { formatQuantity } from "./units.js";
+
+/** Mensaje para un pedido que venció sin pagarse (mismo texto en web, WhatsApp y MCP). */
+export const EXPIRED_MESSAGE = "Este pedido venció sin pagarse. Pide al asistente que lo arme de nuevo.";
 
 const EXPLORER = sekisho.config.explorer;
 
@@ -45,6 +50,7 @@ export function blockReason(orderId: string, token: string): BlockReason | null 
   if (!hasValidToken(orderId, token)) return { status: 404, error: "Pedido no encontrado." };
 
   const found = getOrder(orderId)!;
+  if (isExpired(found.order)) return { status: 409, error: EXPIRED_MESSAGE };
   if (found.order.status !== "pending_payment") {
     return { status: 409, error: "Este pedido ya fue pagado o ya no está disponible." };
   }
@@ -55,7 +61,7 @@ export function blockReason(orderId: string, token: string): BlockReason | null 
 
   const shortages = getStockShortages(orderId);
   if (shortages.length > 0) {
-    const names = shortages.map((s) => `${s.name} (quedan ${s.available})`).join(", ");
+    const names = shortages.map((s) => `${s.name} (quedan ${formatQuantity(s.available, s.unit)})`).join(", ");
     return {
       status: 409,
       error: `Sin stock suficiente: ${names}. Pide al asistente que ajuste tu pedido.`,

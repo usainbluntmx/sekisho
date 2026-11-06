@@ -21,6 +21,8 @@ import { NETWORK } from "./network.js";
 import { facilitator, operator, sekisho } from "./payments/usdc-sekisho.js";
 import { registerMcp, MCP_PATH } from "./mcp.js";
 import { startOutboxWorker } from "./outbox.js";
+import { expireOrders, orderTtlMinutes } from "./store.js";
+import { isSettling } from "./settlement-guard.js";
 import { recoverPaidNotifications } from "./notify.js";
 import { limitBody, rateLimit, safeEqual } from "./security.js";
 import { sendWhatsAppVoiceNote, downloadWhatsAppMedia, transcribeAudio, whatsappVoiceEnabled } from "./voice.js";
@@ -213,6 +215,19 @@ if (NETWORK === "avalanche") console.warn("[kanjo] MAINNET: los pagos usan USDC 
 
 // Reparto por lotes de los vaults
 startDistributionScheduler();
+
+// Pedidos sin pagar: vencen a los ORDER_TTL_MINUTES (los que tienen un pago en curso se respetan)
+function sweepExpiredOrders(): void {
+  try {
+    const expired = expireOrders(isSettling);
+    if (expired.length) console.log(`[pedidos] ${expired.length} pedido(s) vencieron sin pagarse: ${expired.join(", ")}`);
+  } catch (error) {
+    console.error("[pedidos] No se pudieron vencer los pedidos:", error);
+  }
+}
+sweepExpiredOrders();
+setInterval(sweepExpiredOrders, 60_000).unref();
+console.log(`[pedidos] Los pedidos sin pagar vencen a los ${orderTtlMinutes()} min`);
 
 serve({ fetch: app.fetch, port: PORT });
 console.log(`[kanjo] Servidor en http://localhost:${PORT}`);

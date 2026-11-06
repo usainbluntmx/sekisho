@@ -2,10 +2,14 @@
  * Normalización del catálogo extraído (sin red ni base de datos: se prueba offline).
  */
 
+import type { Unit } from "./units.js";
+
 export interface CatalogItem {
   name: string;
   description: string;
+  /** Precio por pieza, o por kg si `unit` es "kg". */
   price_atomic: number;
+  unit: Unit;
   category: string;
   image_url: string | null;
 }
@@ -54,6 +58,7 @@ interface RawItem {
   name?: unknown;
   description?: unknown;
   price?: unknown;
+  unit?: unknown;
   category?: unknown;
   image_url?: unknown;
   available?: unknown;
@@ -64,6 +69,13 @@ export interface NormalizeOptions {
   sourceUrl: string;
   maxItems: number;
   fxMxnPerUsdc?: number;
+}
+
+/** "kg", "kilo", "por kg", "/kg" → kg; cualquier otra cosa (o nada) → pieza. */
+export function normalizeUnit(value: unknown): Unit {
+  if (typeof value !== "string") return "pieza";
+  const v = normalizeName(value);
+  return v === "kg" || v === "kilo" || v === "kilogramo" || v === "por kg" || v === "por kilo" ? "kg" : "pieza";
 }
 
 export function normalizeItems(raw: RawItem[], options: NormalizeOptions): { items: CatalogItem[]; warnings: string[] } {
@@ -91,6 +103,7 @@ export function normalizeItems(raw: RawItem[], options: NormalizeOptions): { ite
         name,
         description: typeof item.description === "string" ? item.description.trim().slice(0, 400) : "",
         price_atomic: toAtomic(item.price, options.currency, options.fxMxnPerUsdc),
+        unit: normalizeUnit(item.unit),
         category: typeof item.category === "string" ? item.category.trim().slice(0, 60) : "",
         image_url: resolveImageUrl(item.image_url, options.sourceUrl),
       });
