@@ -61,4 +61,5 @@ Siguiente:
   • Perfil:    npm run store:profile -- ${id} perfil.json
   • Voz web:   ${base}/voice?store=${id}
   • WhatsApp:  el cliente escribe "/tienda ${id}"
+  • Telegram:  npm run telegram:setup -- --links (link t.me/<bot>?start=${id})
   • Agentes:   herramienta MCP menu con store_id "${id}"`);

@@ -28,6 +28,13 @@ import { limitBody, rateLimit, safeEqual } from "./security.js";
 import { sendWhatsAppVoiceNote, downloadWhatsAppMedia, transcribeAudio, whatsappVoiceEnabled } from "./voice.js";
 import { shouldReplyWithVoice, spokenText } from "./voice-text.js";
 import { registerVoiceWeb, VOICE_API_PATH } from "./voice-web.js";
+import {
+  downloadTelegramFile,
+  isTelegramCustomer,
+  registerTelegramWebhook,
+  sendTelegramText,
+  TELEGRAM_PATH,
+} from "./telegram.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
@@ -97,7 +104,9 @@ async function textFor(msg: IncomingMessage): Promise<string | undefined> {
   if (!process.env.ELEVENLABS_API_KEY) return undefined;
 
   try {
-    const { bytes, mime } = await downloadWhatsAppMedia(msg.audioId);
+    const { bytes, mime } = isTelegramCustomer(msg.from)
+      ? await downloadTelegramFile(msg.audioId)
+      : await downloadWhatsAppMedia(msg.audioId);
     const transcript = await transcribeAudio(bytes, mime || msg.audioMime || "audio/ogg");
     if (transcript) setInboxText(msg.id, transcript);
     return transcript ?? undefined;
@@ -107,8 +116,9 @@ async function textFor(msg: IncomingMessage): Promise<string | undefined> {
   }
 }
 
-/** Respuesta por WhatsApp: nota de voz si el cliente habló y no hay link; si falla, texto. */
+/** Respuesta por WhatsApp: nota de voz si el cliente habló y no hay link; si falla, texto. En Telegram, texto. */
 async function sendReply(to: string, text: string, opts?: { voice?: boolean }): Promise<void> {
+  if (isTelegramCustomer(to)) return sendTelegramText(to, text);
   const maxChars = Number(process.env.VOICE_MAX_CHARS ?? 600);
   if (shouldReplyWithVoice({ enabled: whatsappVoiceEnabled(), inboundType: opts?.voice ? "audio" : "text", text, maxChars })) {
     try {
@@ -165,6 +175,25 @@ app.post("/webhook", async (c) => {
 
   return c.text("OK", 200);
 });
+
+// Canal de Telegram (TELEGRAM_CHANNEL=on): un solo bot para todas las tiendas, link por tienda
+const TELEGRAM_ON = process.env.TELEGRAM_CHANNEL === "on";
+if (TELEGRAM_ON) {
+  app.use(TELEGRAM_PATH, rateLimit({ max: 300, windowMs: 60_000 }));
+  registerTelegramWebhook(app, {
+    secret: process.env.TELEGRAM_WEBHOOK_SECRET ?? "",
+    save: saveIncoming,
+    process: processIncoming,
+    discard: (msg) => markDone(msg.id),
+    notifyLimited: (to) => {
+      sendTelegramText(to, "Vas muy rápido 🙂 Espera unos minutos y me vuelves a escribir.").catch(() => {});
+    },
+    perUser: {
+      max: Number(process.env.TELEGRAM_MAX_MESSAGES ?? 20),
+      windowMs: Number(process.env.TELEGRAM_WINDOW_MINUTES ?? 10) * 60_000,
+    },
+  });
+}
 
 // Chat de prueba por HTTP (solo si DEV_CHAT_TOKEN está definido)
 if (DEV_CHAT_TOKEN) {
@@ -231,4 +260,5 @@ console.log(`[pedidos] Los pedidos sin pagar vencen a los ${orderTtlMinutes()} m
 
 serve({ fetch: app.fetch, port: PORT });
 console.log(`[kanjo] Servidor en http://localhost:${PORT}`);
+if (TELEGRAM_ON) console.log(`[kanjo] Canal Telegram: ${process.env.PUBLIC_BASE_URL ?? ""}${TELEGRAM_PATH} (configúralo con telegram:setup)`);
 if (MCP_ON) console.log(`[kanjo] Canal MCP: ${process.env.PUBLIC_BASE_URL ?? ""}${MCP_PATH} (stores, menu, place_order, order_status, pay_order)`);

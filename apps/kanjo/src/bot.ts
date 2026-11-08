@@ -28,8 +28,8 @@ export async function handleMessage(msg: ChatMessage, reply: Reply): Promise<voi
 
   upsertCustomer(msg.from, msg.name);
 
-  // Cambiar de tienda: "/tienda <id>" (los links de cada negocio mandan lo mismo por debajo)
-  const switchTo = msg.text.trim().match(/^\/tienda\s+([a-z0-9-]{3,40})$/i);
+  // Cambiar de tienda: "/tienda <id>" (WhatsApp) o "/start <id>" (link t.me/<bot>?start=<id> de Telegram)
+  const switchTo = msg.text.trim().match(/^\/(?:tienda|start)\s+([a-z0-9-]{3,40})$/i);
   if (switchTo) {
     const target = getStore(switchTo[1].toLowerCase());
     if (!target || !setCustomerStore(msg.from, target.id)) {
@@ -42,6 +42,11 @@ export async function handleMessage(msg: ChatMessage, reply: Reply): Promise<voi
   const store = getCustomerStore(msg.from);
   if (!store) {
     return reply(msg.from, "La tienda aún no está configurada.");
+  }
+
+  // "/start" sin tienda (abrir el bot directo): saludo con la tienda actual, sin gastar una llamada al agente
+  if (msg.text.trim().toLowerCase() === "/start") {
+    return reply(msg.from, `¡Hola! Estás con *${store.name}* 🙂 ¿En qué te ayudo?`);
   }
 
   // Comando de soporte: reinicia la conversación

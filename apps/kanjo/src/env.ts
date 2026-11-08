@@ -56,6 +56,15 @@ if (env.MCP_CHANNEL && !["on", "off"].includes(env.MCP_CHANNEL)) problems.push('
 positiveNumber("MCP_MAX_PENDING");
 positiveNumber("MCP_PER_MINUTE");
 
+// Telegram: con el canal encendido hacen falta el token del bot (BotFather) y el secreto del webhook
+if (env.TELEGRAM_CHANNEL && !["on", "off"].includes(env.TELEGRAM_CHANNEL)) problems.push('TELEGRAM_CHANNEL: debe ser "on" u "off"');
+if (env.TELEGRAM_CHANNEL === "on") {
+  required("TELEGRAM_BOT_TOKEN", (v) => /^\d+:[\w-]{30,}$/.test(v), "el que da BotFather: número:clave");
+  required("TELEGRAM_WEBHOOK_SECRET", (v) => /^[A-Za-z0-9_-]{32,256}$/.test(v), "32 a 256 letras, números, _ o -; genera uno con: openssl rand -hex 32");
+}
+positiveNumber("TELEGRAM_MAX_MESSAGES");
+positiveNumber("TELEGRAM_WINDOW_MINUTES");
+
 // Caducidad de pedidos sin pagar: minutos enteros entre 5 y 10080 (7 días)
 if (env.ORDER_TTL_MINUTES) {
   const ttl = Number(env.ORDER_TTL_MINUTES);

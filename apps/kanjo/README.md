@@ -2,7 +2,7 @@
 
 An AI sales agent for small businesses. It talks to customers, answers from the store's catalog, builds the order and sends a payment link. The customer pays in USDC and the money goes to the store's SplitVault through [Sekisho](../../README.md).
 
-> **Status:** runs on **Avalanche Fuji (testnet)**. The WhatsApp channel is built and waiting for Meta's business verification; the web voice channel (`/voice`) is off in production. Mainnet needs a way to pay without a browser wallet (see [Limits](#limits)).
+> **Status:** runs on **Avalanche Fuji (testnet)**. Telegram is the first live chat channel; the WhatsApp channel is built and waiting for Meta's business verification; the web voice channel (`/voice`) is off in production. Mainnet needs a way to pay without a browser wallet (see [Limits](#limits)).
 
 ## How it works
 
@@ -40,6 +40,7 @@ How customers reach a store:
 | Channel | How |
 | --- | --- |
 | WhatsApp | The customer sends `/tienda <id>`. Kanjō remembers the store for that customer and starts a fresh conversation. Customers who never chose one talk to the default store (`STORE_ID`). |
+| Telegram | The store shares `https://t.me/<bot>?start=<id>`. Opening it sends `/start <id>`, which works like `/tienda`. |
 | Web voice | `/voice?store=<id>` |
 | AI agents (MCP) | `stores` lists them; `menu`, `place_order` take a `store_id` |
 
@@ -101,6 +102,7 @@ In the Docker image the same tools are `node dist/scripts/store-profile.js`, `st
 
 | Channel | How | Status |
 | --- | --- | --- |
+| Telegram | One bot for every store, webhook at `/telegram/webhook` (secret checked with `X-Telegram-Bot-Api-Secret-Token`) | `TELEGRAM_CHANNEL=on` |
 | WhatsApp | Meta WhatsApp Cloud API webhook (`/webhook`, signature checked with `X-Hub-Signature-256`) | Built, waiting for Meta verification |
 | Terminal | `npm run chat` | For local testing |
 | HTTP dev chat | `POST /dev/chat`, only when `DEV_CHAT_TOKEN` is set | Off in production |
@@ -119,6 +121,22 @@ In the Docker image the same tools are `node dist/scripts/store-profile.js`, `st
   - an inbox that survives restarts: no message is answered twice, and pending ones are picked up again after a crash;
   - an outbox with retries for notifications;
   - rate limits per IP and a 64 KB body limit.
+
+## Telegram
+
+One bot serves every store. Customers reach a store through its link, and from then on they use the same agent, orders, payment links and notices as on WhatsApp. Telegram customers are stored as `tg-<chat_id>`.
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) (`/newbot`). Use a new bot, not the ops alert bot.
+2. Set `TELEGRAM_CHANNEL=on`, `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` (`openssl rand -hex 32`), and restart.
+3. Run `npm run telegram:setup` (in Docker: `node dist/scripts/telegram-setup.js` from `/app`). It registers the webhook and prints the link of every store. `--info` shows the webhook status and its last error; `--links` prints the links only.
+
+Details:
+
+- Only private chats with people are handled. Groups, bots, edits and stickers are ignored.
+- Voice notes are transcribed when ElevenLabs is configured, and replies go as text.
+- Replies use Telegram HTML with everything escaped except bold, so a payment link with `_` or `*` never breaks a message. If Telegram still rejects the formatting, the message is resent as plain text.
+- Each person can send `TELEGRAM_MAX_MESSAGES` messages per `TELEGRAM_WINDOW_MINUTES` (20 per 10 min by default), because the bot is open to anyone and every message costs an agent call. Retries from Telegram do not count toward that limit.
+- To get store notices on Telegram, message the bot, copy your `tg-<chat_id>` from the logs (`[telegram] Name (tg-…)`) and set it as `MERCHANT_WA_ID`.
 
 ## Buy through an AI agent (MCP)
 
@@ -164,20 +182,23 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 | `NETWORK` | no | `avalancheFuji` (default) or `avalanche` |
 | `STORE_ID`, `STORE_NAME` | no | Store seeded on start, and the default store for customers who have not chosen one |
 | `DISTRIBUTE_*` | no | Split policy (batch by default) |
-| `WHATSAPP_*`, `NOTIFY_CHANNEL`, `MERCHANT_WA_ID` | for WhatsApp | Cloud API credentials and where notices go |
+| `WHATSAPP_*`, `NOTIFY_CHANNEL`, `MERCHANT_WA_ID` | for WhatsApp | Cloud API credentials and where notices go (`MERCHANT_WA_ID` can be a `tg-<chat_id>`) |
 | `FIRECRAWL_API_KEY`, `FX_MXN_PER_USDC` | for catalog import | Firecrawl key and MXN rate |
 | `ELEVENLABS_*`, `VOICE_WEB`, `VOICE_REPLIES` | for voice | ElevenLabs key and voice, and which channels speak |
 | `MCP_CHANNEL`, `MCP_MAX_PENDING`, `MCP_PER_MINUTE` | for agents | Turns on `/mcp` and its limits |
 | `ORDER_TTL_MINUTES` | no | Minutes an unpaid order lasts (5 to 10080, default 60) |
+| `TELEGRAM_CHANNEL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | for Telegram | Turns on `/telegram/webhook`, the bot token from BotFather, and the webhook secret |
+| `TELEGRAM_MAX_MESSAGES`, `TELEGRAM_WINDOW_MINUTES` | no | Messages per person per window (default 20 per 10 min) |
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store, weight/expiry and template checks |
+| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store, weight/expiry, template and Telegram checks |
 | `npm run store:create` | Preview and create a store (id, name, wallet, optional profile) |
 | `npm run store:template -- <type>` | Example profile and catalog to edit for a business type |
 | `npm run catalog:load -- <store> <file>` | Preview and load a catalog from a JSON file |
+| `npm run telegram:setup` | Register the Telegram webhook and print each store's link (`--info`, `--links`) |
 | `npm run store:profile` | Show, preview and save a store's business profile |
 | `npm run typecheck` | TypeScript check |
 | `npm run db:check` | Runs a test order through the store database (catalog, order, payment) |
@@ -195,6 +216,6 @@ The [`Dockerfile`](Dockerfile) builds a production image that runs as an unprivi
 ## Limits
 
 - **Paying needs a browser wallet.** The checkout works with an injected wallet (for example MetaMask or Core on desktop, or the wallet's in-app browser on mobile). Paying from any phone without a wallet is the main item before mainnet.
-- **Store notices go to one number.** Paid-order notices for every store go to `MERCHANT_WA_ID`, with the store name in the message. Each store gets its own contact with the Telegram channel.
+- **Store notices go to one number.** Paid-order notices for every store go to `MERCHANT_WA_ID`, with the store name in the message. Each store will get its own contact with merchant onboarding.
 - **One replica.** The settlement lock and rate limits live in the process, so Kanjō runs as a single instance.
 - **Testnet only** for now: orders are paid with Fuji USDC.

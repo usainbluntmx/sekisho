@@ -5,6 +5,7 @@ import { getOrder, getStore, type StockShortage } from "./store.js";
 import { formatUsdc } from "./money.js";
 import { formatQuantity, itemLabel } from "./units.js";
 import { enqueueNotification } from "./outbox.js";
+import { isTelegramCustomer } from "./telegram.js";
 
 const MERCHANT_WA_ID = process.env.MERCHANT_WA_ID ?? "";
 const EXPLORER = NETWORK_CONFIG.explorer;
@@ -37,6 +38,7 @@ function hasNoDirectChannel(waId: string): boolean {
 function customerLabel(waId: string): string {
   if (isWebCustomer(waId)) return `${customerName(waId)} (canal web)`;
   if (isAgentCustomer(waId)) return `${customerName(waId)} (agente de IA por MCP)`;
+  if (isTelegramCustomer(waId)) return `${customerName(waId)} (Telegram)`;
   return `${customerName(waId)} (+${waId})`;
 }
 

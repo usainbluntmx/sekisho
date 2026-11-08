@@ -1,5 +1,6 @@
 import { db } from "./db.js";
 import { sendText } from "./whatsapp.js";
+import { isTelegramCustomer, sendTelegramText } from "./telegram.js";
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS outbox (
@@ -27,6 +28,11 @@ export type Deliver = (to: string, body: string) => Promise<void>;
 
 /** Entrega por el canal configurado. Lanza error si falla, para reintentar. */
 export const defaultDeliver: Deliver = async (to, body) => {
+  // Clientes (o la tienda) en Telegram: siempre por Telegram (sin token, se imprime en consola)
+  if (isTelegramCustomer(to)) {
+    await sendTelegramText(to, body);
+    return;
+  }
   if (CHANNEL === "whatsapp") {
     await sendText(to, body);
     return;
