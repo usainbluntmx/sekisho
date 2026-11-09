@@ -65,6 +65,14 @@ if (env.TELEGRAM_CHANNEL === "on") {
 positiveNumber("TELEGRAM_MAX_MESSAGES");
 positiveNumber("TELEGRAM_WINDOW_MINUTES");
 
+// Alta de comerciantes por chat: quien aprueba tiendas (tg-… o número de WhatsApp)
+if (env.MERCHANT_ONBOARDING && !["on", "off"].includes(env.MERCHANT_ONBOARDING)) problems.push('MERCHANT_ONBOARDING: debe ser "on" u "off"');
+if (env.MERCHANT_ONBOARDING === "on") {
+  required("KANJO_ADMIN_ID", (v) => /^(tg-\d+|\d{10,15})$/.test(v), "tu id de Telegram (tg-…) o tu número de WhatsApp");
+  required("FX_MXN_PER_USDC", (v) => Number(v) > 0, "pesos por 1 USDC, por ejemplo 18.5: los comerciantes dan precios en pesos");
+}
+positiveNumber("ONBOARDING_MAX_DRAFTS");
+
 // Caducidad de pedidos sin pagar: minutos enteros entre 5 y 10080 (7 días)
 if (env.ORDER_TTL_MINUTES) {
   const ttl = Number(env.ORDER_TTL_MINUTES);

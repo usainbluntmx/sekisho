@@ -1,4 +1,4 @@
-import { listStores } from "../store.js";
+import { listPublishedStores } from "../store.js";
 import { setupTelegramWebhook, storeLink, telegramConfigured, telegramUsername, telegramWebhookInfo } from "../telegram.js";
 
 // Canal de Telegram (usa TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET y PUBLIC_BASE_URL del entorno; nunca los imprime):
@@ -14,7 +14,7 @@ if (!telegramConfigured()) {
 
 function printLinks(username: string): void {
   console.log(`\nBot: @${username}\nLinks para compartir (cada uno abre el bot con esa tienda):`);
-  for (const s of listStores()) console.log(`  ${s.name.padEnd(28)} ${storeLink(username, s.id)}`);
+  for (const s of listPublishedStores()) console.log(`  ${s.name.padEnd(28)} ${storeLink(username, s.id)}`);
 }
 
 try {

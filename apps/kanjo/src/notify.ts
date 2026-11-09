@@ -8,6 +8,11 @@ import { enqueueNotification } from "./outbox.js";
 import { isTelegramCustomer } from "./telegram.js";
 
 const MERCHANT_WA_ID = process.env.MERCHANT_WA_ID ?? "";
+
+/** A quién avisar de los pedidos de una tienda: su contacto (dueño del alta por chat) o MERCHANT_WA_ID. */
+function merchantContact(store: { contact: string | null } | undefined): string {
+  return store?.contact || MERCHANT_WA_ID;
+}
 const EXPLORER = NETWORK_CONFIG.explorer;
 
 function parseShortages(raw: string | null): StockShortage[] {
@@ -79,7 +84,8 @@ export function enqueueOrderPaid(orderId: string): number {
   }
 
   // 2) Tienda
-  if (MERCHANT_WA_ID) {
+  const merchant = merchantContact(store);
+  if (merchant) {
     const merchantWarning =
       shortages.length > 0
         ? `\n\n⚠️ *Atención: pagado sin stock suficiente*\n${shortages
@@ -90,7 +96,7 @@ export function enqueueOrderPaid(orderId: string): number {
     if (
       enqueueNotification(
         `order-paid:${order.id}:merchant`,
-        MERCHANT_WA_ID,
+        merchant,
         `🛒 *Nuevo pedido pagado* · ${order.id}${store ? ` · ${store.name}` : ""}\n\n${lines}\n*Total:* ${total} USDC\n*Cliente:* ${customerLabel(order.customer_wa_id)}\n\nComprobante: ${EXPLORER}/tx/${order.payment_tx}${merchantWarning}`
       )
     ) {
@@ -118,10 +124,10 @@ export function enqueueDuplicatePayment(orderId: string, paymentTx: string, amou
     );
   }
 
-  if (MERCHANT_WA_ID) {
+  if (merchantContact(store)) {
     enqueueNotification(
       `duplicate:${paymentTx}:merchant`,
-      MERCHANT_WA_ID,
+      merchantContact(store),
       `⚠️ *Pago duplicado* · ${order.id}${store ? ` · ${store.name}` : ""}\n\nSe recibió otro pago de ${amount} USDC para un pedido ya pagado.\n*Cliente:* ${customerLabel(order.customer_wa_id)}\nReembolsa al cliente.\n\nComprobante: ${EXPLORER}/tx/${paymentTx}`
     );
   }

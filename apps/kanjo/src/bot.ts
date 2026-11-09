@@ -1,6 +1,7 @@
-import { getCustomerStore, getStore, setCustomerStore, upsertCustomer } from "./store.js";
+import { getCustomerStore, getStore, isVisibleTo, setCustomerStore, upsertCustomer } from "./store.js";
 import { clearHistory } from "./memory.js";
 import { runAgent } from "./agent.js";
+import { handleMerchant } from "./onboarding.js";
 
 
 export interface ChatMessage {
@@ -28,11 +29,18 @@ export async function handleMessage(msg: ChatMessage, reply: Reply): Promise<voi
 
   upsertCustomer(msg.from, msg.name);
 
+  // Alta de comerciantes y comandos del administrador (MERCHANT_ONBOARDING=on): no pasan por el agente
+  const merchantReplies = await handleMerchant(msg.from, msg.text);
+  if (merchantReplies) {
+    for (const text of merchantReplies) await reply(msg.from, text);
+    return;
+  }
+
   // Cambiar de tienda: "/tienda <id>" (WhatsApp) o "/start <id>" (link t.me/<bot>?start=<id> de Telegram)
   const switchTo = msg.text.trim().match(/^\/(?:tienda|start)\s+([a-z0-9-]{3,40})$/i);
   if (switchTo) {
     const target = getStore(switchTo[1].toLowerCase());
-    if (!target || !setCustomerStore(msg.from, target.id)) {
+    if (!target || !isVisibleTo(target, msg.from) || !setCustomerStore(msg.from, target.id)) {
       return reply(msg.from, "No encontré esa tienda 🙈 Revisa el link que te compartieron.");
     }
     clearHistory(msg.from); // la conversación anterior era con otra tienda

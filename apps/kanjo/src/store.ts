@@ -10,6 +10,19 @@ export interface Store {
   merchant_address: string;
   /** Perfil de negocio ya validado (vacío si la tienda no lo ha llenado). */
   profile: StoreProfile;
+  /** draft = armándose · pending = esperando aprobación · published = la ven clientes y agentes. */
+  status: StoreStatus;
+  /** Quién la dio de alta por chat (tg-… o número de WhatsApp); null en tiendas creadas por consola. */
+  owner: string | null;
+  /** A quién se avisa de sus pedidos; null = MERCHANT_WA_ID. */
+  contact: string | null;
+}
+
+export type StoreStatus = "draft" | "pending" | "published";
+
+/** La ven todos si está publicada; su dueño la ve siempre (para probarla antes de publicarla). */
+export function isVisibleTo(store: Store, customerId?: string): boolean {
+  return store.status === "published" || (Boolean(customerId) && store.owner === customerId);
 }
 
 type StoreRow = Omit<Store, "profile"> & { profile: string };
@@ -101,6 +114,22 @@ export interface NewStore {
   name: string;
   merchant: string;
   profile?: unknown;
+  status?: StoreStatus;
+  owner?: string;
+}
+
+/** Palabras que no pueden ser id de tienda porque son comandos (t.me/<bot>?start=vender). */
+export const RESERVED_IDS = new Set(["vender", "tienda", "start", "admin", "ayuda"]);
+
+/** Problema de una wallet en palabras simples, o null si sirve para recibir pagos. */
+export function walletProblem(input: string): string | null {
+  const merchant = input?.trim() ?? "";
+  if (!isAddress(merchant, { strict: false })) return "no es una dirección válida (0x + 40 caracteres hexadecimales)";
+  if (getAddress(merchant) === zeroAddress) return "la dirección 0x000… no puede recibir pagos";
+  if (merchant !== merchant.toLowerCase() && !isAddress(merchant, { strict: true })) {
+    return "la dirección tiene mayúsculas que no coinciden con su checksum (¿se copió mal?)";
+  }
+  return null;
 }
 
 /** Valida una tienda nueva sin guardar nada. Devuelve los problemas en palabras simples. */
@@ -109,19 +138,15 @@ export function validateNewStore(input: NewStore): string[] {
   const id = input.id?.trim() ?? "";
   if (!STORE_ID_RE.test(id) || id.length < 3 || id.length > 40) {
     problems.push("id: de 3 a 40 caracteres, solo minúsculas, números y guiones (por ejemplo carniceria-don-pepe)");
+  } else if (RESERVED_IDS.has(id)) {
+    problems.push(`id: "${id}" está reservado; usa otro`);
   } else if (getStore(id)) {
     problems.push(`id: ya existe una tienda "${id}"`);
   }
   const name = input.name?.trim() ?? "";
   if (name.length < 2 || name.length > 80) problems.push("nombre: de 2 a 80 caracteres");
-  const merchant = input.merchant?.trim() ?? "";
-  if (!isAddress(merchant, { strict: false })) {
-    problems.push("wallet del vendedor: no es una dirección válida (0x + 40 caracteres hexadecimales)");
-  } else if (getAddress(merchant) === zeroAddress) {
-    problems.push("wallet del vendedor: la dirección 0x000… no puede recibir pagos");
-  } else if (merchant !== merchant.toLowerCase() && !isAddress(merchant, { strict: true })) {
-    problems.push("wallet del vendedor: la dirección tiene mayúsculas que no coinciden con su checksum (¿se copió mal?)");
-  }
+  const wallet = walletProblem(input.merchant);
+  if (wallet) problems.push(`wallet del vendedor: ${wallet}`);
   if (input.profile !== undefined) {
     const result = validateProfile(input.profile);
     if (!result.ok) problems.push(...result.problems.map((p) => `perfil · ${p}`));
@@ -134,24 +159,29 @@ export function createStore(input: NewStore): { ok: true; store: Store } | { ok:
   const problems = validateNewStore(input);
   if (problems.length) return { ok: false, problems };
   const profile = input.profile === undefined ? {} : (validateProfile(input.profile) as { profile: StoreProfile }).profile;
-  db.prepare("INSERT INTO stores (id, name, merchant_address, profile) VALUES (?, ?, ?, ?)").run(
+  db.prepare("INSERT INTO stores (id, name, merchant_address, profile, status, owner, contact) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
     input.id.trim(),
     input.name.trim(),
     getAddress(input.merchant.trim()),
-    JSON.stringify(profile)
+    JSON.stringify(profile),
+    input.status ?? "published",
+    input.owner ?? null,
+    input.owner ?? null // el dueño recibe los avisos de sus pedidos
   );
   return { ok: true, store: getStore(input.id.trim())! };
 }
 
-/** La tienda con la que habla el cliente; si no eligió (o ya no existe), la tienda por defecto. */
+/** La tienda con la que habla el cliente; si no eligió (o ya no la puede ver), la tienda por defecto. */
 export function getCustomerStore(waId: string): Store | undefined {
   const row = db.prepare("SELECT store_id FROM customers WHERE wa_id = ?").get(waId) as { store_id: string | null } | undefined;
-  return (row?.store_id ? getStore(row.store_id) : undefined) ?? getStore(DEFAULT_STORE_ID);
+  const chosen = row?.store_id ? getStore(row.store_id) : undefined;
+  return chosen && isVisibleTo(chosen, waId) ? chosen : getStore(DEFAULT_STORE_ID);
 }
 
-/** Cambia la tienda de un cliente. Devuelve false si la tienda no existe (y no cambia nada). */
+/** Cambia la tienda de un cliente. Devuelve false si no existe o el cliente no la puede ver (y no cambia nada). */
 export function setCustomerStore(waId: string, storeId: string): boolean {
-  if (!getStore(storeId)) return false;
+  const store = getStore(storeId);
+  if (!store || !isVisibleTo(store, waId)) return false;
   db.prepare(
     `INSERT INTO customers (wa_id, store_id) VALUES (?, ?)
      ON CONFLICT(wa_id) DO UPDATE SET store_id = excluded.store_id`
@@ -159,8 +189,49 @@ export function setCustomerStore(waId: string, storeId: string): boolean {
   return true;
 }
 
+/** Todas las tiendas (herramientas de consola). Para clientes y agentes, listPublishedStores. */
 export function listStores(): Store[] {
-  return (db.prepare("SELECT id, name, merchant_address, profile FROM stores ORDER BY name").all() as unknown as StoreRow[]).map(toStore);
+  return (db.prepare("SELECT id, name, merchant_address, profile, status, owner, contact FROM stores ORDER BY name").all() as unknown as StoreRow[]).map(toStore);
+}
+
+export function listPublishedStores(): Store[] {
+  return listStores().filter((s) => s.status === "published");
+}
+
+export function listStoresByStatus(status: StoreStatus): Store[] {
+  return listStores().filter((s) => s.status === status);
+}
+
+export function getStoreByOwner(owner: string): Store | undefined {
+  const row = db.prepare("SELECT id, name, merchant_address, profile, status, owner, contact FROM stores WHERE owner = ? LIMIT 1").get(owner) as unknown as StoreRow | undefined;
+  return row && toStore(row);
+}
+
+export function setStoreStatus(storeId: string, status: StoreStatus): boolean {
+  return Number(db.prepare("UPDATE stores SET status = ? WHERE id = ?").run(status, storeId).changes) > 0;
+}
+
+/**
+ * Borra una tienda que nunca se publicó y no tiene pedidos (alta cancelada). Devuelve false si no se puede.
+ * Una tienda publicada o con pedidos nunca se borra.
+ */
+export function deleteUnpublishedStore(storeId: string): boolean {
+  const store = getStore(storeId);
+  if (!store || store.status === "published") return false;
+  const orders = db.prepare("SELECT COUNT(*) AS n FROM orders WHERE store_id = ?").get(storeId) as { n: number };
+  if (Number(orders.n) > 0) return false;
+  db.exec("BEGIN");
+  try {
+    db.prepare("DELETE FROM products WHERE store_id = ?").run(storeId);
+    db.prepare("DELETE FROM catalog_imports WHERE store_id = ?").run(storeId);
+    db.prepare("UPDATE customers SET store_id = NULL WHERE store_id = ?").run(storeId);
+    db.prepare("DELETE FROM stores WHERE id = ?").run(storeId);
+    db.exec("COMMIT");
+    return true;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 /** Guarda el perfil SOLO si es válido. Devuelve los problemas si no lo es (y no cambia nada). */
@@ -181,7 +252,7 @@ export function countPendingOrders(customerPrefix: string): number {
 }
 
 export function getStore(id: string): Store | undefined {
-  const row = db.prepare("SELECT id, name, merchant_address, profile FROM stores WHERE id = ?").get(id) as unknown as
+  const row = db.prepare("SELECT id, name, merchant_address, profile, status, owner, contact FROM stores WHERE id = ?").get(id) as unknown as
     | StoreRow
     | undefined;
   return row && toStore(row);

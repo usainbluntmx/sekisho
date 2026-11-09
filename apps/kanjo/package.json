@@ -4,7 +4,7 @@
   "description": "AI sales agent for small businesses: chats with customers, builds orders and collects USDC through Sekisho",
   "main": "index.js",
   "scripts": {
-    "test": "npm run test:safety && npm run test:distribution && npm run test:security && npm run test:inbox && npm run test:catalog && npm run test:mcp && npm run test:profile && npm run test:stores && npm run test:orders && npm run test:templates && npm run test:telegram",
+    "test": "npm run test:safety && npm run test:distribution && npm run test:security && npm run test:inbox && npm run test:catalog && npm run test:mcp && npm run test:profile && npm run test:stores && npm run test:orders && npm run test:templates && npm run test:telegram && npm run test:onboarding",
     "dev": "npm run build:web && node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/index.ts",
     "chat": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/dev-chat.ts",
     "seed": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/seed.ts",
@@ -24,6 +24,7 @@
     "test:catalog": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-catalog-import.ts",
     "test:mcp": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-mcp.ts",
     "test:profile": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-profile.ts",
+    "test:onboarding": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-onboarding.ts",
     "test:telegram": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-telegram.ts",
     "telegram:setup": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env --import tsx src/scripts/telegram-setup.ts",
     "test:templates": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-templates.ts",

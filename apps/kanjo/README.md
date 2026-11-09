@@ -138,6 +138,17 @@ Details:
 - Each person can send `TELEGRAM_MAX_MESSAGES` messages per `TELEGRAM_WINDOW_MINUTES` (20 per 10 min by default), because the bot is open to anyone and every message costs an agent call. Retries from Telegram do not count toward that limit.
 - To get store notices on Telegram, message the bot, copy your `tg-<chat_id>` from the logs (`[telegram] Name (tg-…)`) and set it as `MERCHANT_WA_ID`.
 
+## Merchant onboarding
+
+With `MERCHANT_ONBOARDING=on`, a shop owner creates their store from the chat, with no console and no JSON. The flow is a fixed sequence of questions, not the AI agent, so every answer is checked with the same rules as the console tools and no agent calls are spent.
+
+1. `/vender` (or the link `https://t.me/<bot>?start=vender`) asks, one at a time: the name, the business type, pickup or delivery, the address or delivery area, the hours, the prep time, and the wallet. For the wallet, the owner pastes the address, its checksum is verified and they confirm it by typing its last 4 characters.
+2. **Products** go in one message, one per line: `Nombre, precio en pesos, kg, existencias`. The preview shows each price in USDC and the price in pesos read back (so a mistyped "1,200" is obvious), and nothing is saved until the owner answers *sí*.
+3. The store is created as a **draft**. Customers and AI agents cannot see it, but its owner can: `/probar` lets them chat with it as a customer.
+4. `/enviar` sends it for review: the admin (`KANJO_ADMIN_ID`) gets a summary with the wallet and products, and answers `/aprobar <id>` or `/rechazar <id> <reason>`. The owner is told either way, and on approval gets the store's link.
+
+From then on, `/vender` opens the owner's panel: `/productos` replaces the catalog, `/perfil` changes delivery, address and hours, and paid-order notices go to the owner instead of `MERCHANT_WA_ID`. Editing a store under review sends it back to draft. The wallet cannot be changed from the chat, and a published store cannot be deleted from it. There is one store per owner, at most `ONBOARDING_MAX_DRAFTS` unpublished stores exist at once (default 50), and the web voice channel and AI agents cannot onboard. The admin can also use `/pendientes` and `/ver <id>`.
+
 ## Buy through an AI agent (MCP)
 
 With `MCP_CHANNEL=on`, Kanjō serves an MCP endpoint at `/mcp` (Streamable HTTP). Any agent can buy from any store in the instance:
@@ -189,12 +200,13 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 | `ORDER_TTL_MINUTES` | no | Minutes an unpaid order lasts (5 to 10080, default 60) |
 | `TELEGRAM_CHANNEL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | for Telegram | Turns on `/telegram/webhook`, the bot token from BotFather, and the webhook secret |
 | `TELEGRAM_MAX_MESSAGES`, `TELEGRAM_WINDOW_MINUTES` | no | Messages per person per window (default 20 per 10 min) |
+| `MERCHANT_ONBOARDING`, `KANJO_ADMIN_ID`, `ONBOARDING_MAX_DRAFTS` | for onboarding | Turns on store creation from the chat, who approves stores (`tg-<chat_id>` or a WhatsApp number), and the cap on unpublished stores. Needs `FX_MXN_PER_USDC` |
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store, weight/expiry, template and Telegram checks |
+| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store, weight/expiry, template, Telegram and onboarding checks |
 | `npm run store:create` | Preview and create a store (id, name, wallet, optional profile) |
 | `npm run store:template -- <type>` | Example profile and catalog to edit for a business type |
 | `npm run catalog:load -- <store> <file>` | Preview and load a catalog from a JSON file |
@@ -216,6 +228,7 @@ The [`Dockerfile`](Dockerfile) builds a production image that runs as an unprivi
 ## Limits
 
 - **Paying needs a browser wallet.** The checkout works with an injected wallet (for example MetaMask or Core on desktop, or the wallet's in-app browser on mobile). Paying from any phone without a wallet is the main item before mainnet.
-- **Store notices go to one number.** Paid-order notices for every store go to `MERCHANT_WA_ID`, with the store name in the message. Each store will get its own contact with merchant onboarding.
+- **Stores created from the console share one contact.** Their paid-order notices go to `MERCHANT_WA_ID`, with the store name in the message; stores created from the chat notify their owner.
+- **The merchant wallet is pasted by hand** during onboarding (checksum and last-4 confirmation). Onboarding without a wallet is still pending.
 - **One replica.** The settlement lock and rate limits live in the process, so Kanjō runs as a single instance.
 - **Testnet only** for now: orders are paid with Fuji USDC.

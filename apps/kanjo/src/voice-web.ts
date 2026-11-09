@@ -31,7 +31,7 @@ export function registerVoiceWeb(app: Hono): void {
   app.get("/voice", (c) => {
     const requested = c.req.query("store") ?? DEFAULT_STORE_ID;
     const store = STORE_ID_RE.test(requested) ? getStore(requested) : undefined;
-    if (!store) return c.text("No encontré esa tienda", 404);
+    if (!store || store.status !== "published") return c.text("No encontré esa tienda", 404);
     return c.html(renderVoicePage({ store, products: listProducts(store.id), voice: elevenLabsConfigured() }));
   });
 

@@ -95,6 +95,17 @@ if (!hasColumn("customers", "store_id")) {
   db.exec("ALTER TABLE customers ADD COLUMN store_id TEXT REFERENCES stores(id)");
 }
 
+// Alta por chat: estado de la tienda (las existentes quedan publicadas), dueño y a quién avisarle de sus pedidos
+if (!hasColumn("stores", "status")) {
+  db.exec("ALTER TABLE stores ADD COLUMN status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('draft', 'pending', 'published'))");
+}
+if (!hasColumn("stores", "owner")) {
+  db.exec("ALTER TABLE stores ADD COLUMN owner TEXT");
+}
+if (!hasColumn("stores", "contact")) {
+  db.exec("ALTER TABLE stores ADD COLUMN contact TEXT");
+}
+
 // Venta por pieza o por kilo. En productos por kg, stock y cantidades van en GRAMOS (enteros)
 if (!hasColumn("products", "unit")) {
   db.exec("ALTER TABLE products ADD COLUMN unit TEXT NOT NULL DEFAULT 'pieza' CHECK (unit IN ('pieza', 'kg'))");

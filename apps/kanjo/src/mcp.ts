@@ -18,7 +18,13 @@ import { toFacilitatorClient } from "@zero-two-labs/sekisho";
 import { z } from "zod";
 import { formatUsdc } from "./money.js";
 import { endSettlement } from "./settlement-guard.js";
-import { countPendingOrders, createOrder, getOrder, getStore, isExpired, lineTotal, listProducts, listStores, upsertCustomer, type OrderItem } from "./store.js";
+import { countPendingOrders, createOrder, getOrder, getStore as getAnyStore, isExpired, lineTotal, listProducts, listPublishedStores, upsertCustomer, type OrderItem } from "./store.js";
+
+/** Los agentes solo ven tiendas publicadas: un borrador no existe para ellos. */
+const getStore = (id: string) => {
+  const store = getAnyStore(id);
+  return store?.status === "published" ? store : undefined;
+};
 import { formatQuantity, fromBase } from "./units.js";
 
 const lineForAgent = (l: OrderItem) => ({
@@ -129,7 +135,7 @@ export async function createKanjoMcp(options: McpOptions) {
             order_id: orderId,
             status: "paid",
             total_usdc: formatUsdc(found.order.total_atomic),
-            message: `Pago recibido. La tienda ya fue avisada. ${fulfillmentLine(getStore(found.order.store_id)!.profile)}`,
+            message: `Pago recibido. La tienda ya fue avisada. ${fulfillmentLine(getAnyStore(found.order.store_id)!.profile)}`,
             note: "Tell the customer exactly this; do not promise delivery or times that are not stated here.",
           });
         })(args as Record<string, unknown>, extra as never)
@@ -145,7 +151,7 @@ export async function createKanjoMcp(options: McpOptions) {
 
     server.tool("stores", "Free. Lists the stores you can buy from: id, name, type and description.", {}, async () =>
       text(
-        listStores().map((s) => ({
+        listPublishedStores().map((s) => ({
           id: s.id,
           name: s.name,
           type: BUSINESS_TYPES[s.profile.businessType],
