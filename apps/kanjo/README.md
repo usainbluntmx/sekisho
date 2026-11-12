@@ -135,7 +135,7 @@ Details:
 - Only private chats with people are handled. Groups, bots, edits and stickers are ignored.
 - Voice notes are transcribed when ElevenLabs is configured, and replies go as text.
 - Replies use Telegram HTML with everything escaped except bold, so a payment link with `_` or `*` never breaks a message. If Telegram still rejects the formatting, the message is resent as plain text.
-- Each person can send `TELEGRAM_MAX_MESSAGES` messages per `TELEGRAM_WINDOW_MINUTES` (20 per 10 min by default), because the bot is open to anyone and every message costs an agent call. Retries from Telegram do not count toward that limit.
+- Each person can send `TELEGRAM_MAX_MESSAGES` messages per `TELEGRAM_WINDOW_MINUTES` (20 per 10 min by default), because the bot is open to anyone and every message costs an agent call. Retries from Telegram do not count toward that limit, and neither do the admin's messages or those of someone in the middle of merchant onboarding, which never call the agent.
 - To get store notices on Telegram, message the bot, copy your `tg-<chat_id>` from the logs (`[telegram] Name (tg-…)`) and set it as `MERCHANT_WA_ID`.
 
 ## Merchant onboarding
@@ -147,7 +147,7 @@ With `MERCHANT_ONBOARDING=on`, a shop owner creates their store from the chat, w
 3. The store is created as a **draft**. Customers and AI agents cannot see it, but its owner can: `/probar` lets them chat with it as a customer.
 4. `/enviar` sends it for review: the admin (`KANJO_ADMIN_ID`) gets a summary with the wallet and products, and answers `/aprobar <id>` or `/rechazar <id> <reason>`. The owner is told either way, and on approval gets the store's link.
 
-From then on, `/vender` opens the owner's panel: `/productos` replaces the catalog, `/perfil` changes delivery, address and hours, and paid-order notices go to the owner instead of `MERCHANT_WA_ID`. Editing a store under review sends it back to draft. The wallet cannot be changed from the chat, and a published store cannot be deleted from it. There is one store per owner, at most `ONBOARDING_MAX_DRAFTS` unpublished stores exist at once (default 50), and the web voice channel and AI agents cannot onboard. The admin can also use `/pendientes` and `/ver <id>`.
+From then on, `/vender` opens the owner's panel: `/productos` replaces the catalog, `/perfil` changes delivery, address and hours, and paid-order notices go to the owner instead of `MERCHANT_WA_ID`. Editing a store under review sends it back to draft. The wallet cannot be changed from the chat, and a published store cannot be deleted from it. `/cancelar` deletes a draft together with its unpaid test orders from `/probar`; a store with any paid order is never deleted. There is one store per owner, at most `ONBOARDING_MAX_DRAFTS` unpublished stores exist at once (default 50), and the web voice channel and AI agents cannot onboard. The admin can also use `/pendientes` and `/ver <id>`.
 
 ## Buy through an AI agent (MCP)
 

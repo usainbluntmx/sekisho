@@ -21,6 +21,7 @@ import { NETWORK } from "./network.js";
 import { facilitator, operator, sekisho } from "./payments/usdc-sekisho.js";
 import { registerMcp, MCP_PATH } from "./mcp.js";
 import { startOutboxWorker } from "./outbox.js";
+import { skipsChatLimit } from "./onboarding.js";
 import { expireOrders, orderTtlMinutes } from "./store.js";
 import { isSettling } from "./settlement-guard.js";
 import { recoverPaidNotifications } from "./notify.js";
@@ -185,6 +186,7 @@ if (TELEGRAM_ON) {
     save: saveIncoming,
     process: processIncoming,
     discard: (msg) => markDone(msg.id),
+    exempt: (msg) => skipsChatLimit(msg.from, msg.text),
     notifyLimited: (to) => {
       sendTelegramText(to, "Vas muy rápido 🙂 Espera unos minutos y me vuelves a escribir.").catch(() => {});
     },

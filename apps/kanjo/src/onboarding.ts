@@ -112,6 +112,17 @@ function end(owner: string): void {
   db.prepare("DELETE FROM onboarding WHERE owner = ?").run(owner);
 }
 
+/**
+ * Mensajes que no gastan llamadas al agente y no deben contar para el límite por persona:
+ * el administrador, quien está en medio del alta, y /vender.
+ */
+export function skipsChatLimit(from: string, text?: string): boolean {
+  if (!onboardingEnabled()) return false;
+  if (from === adminId()) return true;
+  if (text?.trim().toLowerCase() === "/vender" || text?.trim().toLowerCase() === "/start vender") return true;
+  return load(from) !== undefined;
+}
+
 // ─────────────── Textos ───────────────
 
 const STATUS_LABEL: Record<Store["status"], string> = {
@@ -133,7 +144,7 @@ function prompt(step: Step, draft: Draft): string {
     case "name":
       return "¿Cómo se llama tu negocio? (así lo verán tus clientes)";
     case "type":
-      return `¿Qué tipo de negocio es? Responde con el número:\n${TYPE_ORDER.map((t, i) => `${i + 1}. ${BUSINESS_TYPES[t]}`).join("\n")}`;
+      return `¿Qué tipo de negocio es? Responde con el número:\n${TYPE_ORDER.map((t, i) => `${i + 1}. ${t === "otro" ? "otro giro" : BUSINESS_TYPES[t]}`).join("\n")}`;
     case "fulfillment":
       return "¿Cómo reciben tus clientes su pedido?\n1. Pasan a recogerlo\n2. Se los llevas a domicilio\n3. Las dos";
     case "address":
@@ -265,6 +276,12 @@ function backToDraftIfPending(store: Store): string {
 
 async function handleAdmin(text: string): Promise<string[] | null> {
   const [command, id, ...rest] = text.trim().split(/\s+/);
+  const needsId = ["/ver", "/aprobar", "/rechazar"].includes(command.toLowerCase());
+  if (needsId && !id) {
+    const pending = listStoresByStatus("pending");
+    const hint = pending.length ? `\nEn revisión: ${pending.map((s) => s.id).join(", ")}` : "\nNo hay tiendas en revisión.";
+    return [`Falta el id de la tienda: ${command.toLowerCase()} <id>${command.toLowerCase() === "/rechazar" ? " <motivo>" : ""}${hint}`];
+  }
   switch (command.toLowerCase()) {
     case "/pendientes": {
       const pending = listStoresByStatus("pending");
@@ -354,7 +371,7 @@ export async function handleMerchant(from: string, text: string): Promise<string
   }
   if (lower === "/cancelar") {
     if (store?.status === "published") return ["Tu tienda ya está publicada; no se puede borrar desde el chat. Escríbenos si necesitas darla de baja."];
-    if (store && !deleteUnpublishedStore(store.id)) return ["No pude borrarla porque ya tiene pedidos. Escríbenos para ayudarte."];
+    if (store && !deleteUnpublishedStore(store.id)) return ["No pude borrarla porque ya tiene pedidos pagados. Escríbenos para ayudarte."];
     end(from);
     return ["Borré tu borrador. Si quieres empezar de nuevo, escribe /vender."];
   }

@@ -212,16 +212,21 @@ export function setStoreStatus(storeId: string, status: StoreStatus): boolean {
 }
 
 /**
- * Borra una tienda que nunca se publicó y no tiene pedidos (alta cancelada). Devuelve false si no se puede.
- * Una tienda publicada o con pedidos nunca se borra.
+ * Borra una tienda que nunca se publicó (alta cancelada), junto con sus pedidos de prueba SIN PAGAR.
+ * Devuelve false si no se puede: una tienda publicada, o con algún pedido pagado, nunca se borra.
  */
 export function deleteUnpublishedStore(storeId: string): boolean {
   const store = getStore(storeId);
   if (!store || store.status === "published") return false;
-  const orders = db.prepare("SELECT COUNT(*) AS n FROM orders WHERE store_id = ?").get(storeId) as { n: number };
-  if (Number(orders.n) > 0) return false;
+  const paid = db
+    .prepare("SELECT COUNT(*) AS n FROM orders WHERE store_id = ? AND (status = 'paid' OR payment_tx IS NOT NULL)")
+    .get(storeId) as { n: number };
+  if (Number(paid.n) > 0) return false;
   db.exec("BEGIN");
   try {
+    // Pedidos de /probar: nunca se cobraron, así que no hay dinero ni comprobantes que conservar
+    db.prepare("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE store_id = ?)").run(storeId);
+    db.prepare("DELETE FROM orders WHERE store_id = ?").run(storeId);
     db.prepare("DELETE FROM products WHERE store_id = ?").run(storeId);
     db.prepare("DELETE FROM catalog_imports WHERE store_id = ?").run(storeId);
     db.prepare("UPDATE customers SET store_id = NULL WHERE store_id = ?").run(storeId);

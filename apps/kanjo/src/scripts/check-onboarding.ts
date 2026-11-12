@@ -18,7 +18,7 @@ globalThis.fetch = (async () =>
 
 const { db } = await import("../db.js");
 const store = await import("../store.js");
-const { handleMerchant, slugFor } = await import("../onboarding.js");
+const { handleMerchant, slugFor, skipsChatLimit } = await import("../onboarding.js");
 const { parseCatalogLines } = await import("../catalog-lines.js");
 const { enqueueOrderPaid } = await import("../notify.js");
 
@@ -89,6 +89,8 @@ check("/enviar → en revisión", /Enviada/.test((await say(PEPE, "/enviar"))!) 
 const review = outbox("store-review:");
 check("Al administrador le llega el resumen con wallet, productos y /aprobar", review?.recipient === ADMIN && review.body.includes(WALLET) && /Arrachera/.test(review.body) && review.body.includes(`/aprobar ${draft.id}`));
 check("Un cliente que escribe /aprobar no aprueba nada (va al agente)", (await say(CLIENTE, `/aprobar ${draft.id}`)) === null && pepeStore().status === "pending");
+check("/aprobar sin id → pide el id y dice cuáles están en revisión", /Falta el id[\s\S]*carniceria-don-pepe/.test((await say(ADMIN, "/aprobar"))!) && pepeStore().status === "pending");
+check("El administrador no cuenta para el límite de mensajes", skipsChatLimit(ADMIN, "/pendientes") && !skipsChatLimit(CLIENTE, "hola"));
 check("/pendientes la lista", /Carnicería Don Pepe — \/ver carniceria-don-pepe/.test((await say(ADMIN, "/pendientes"))!));
 check("/rechazar sin motivo → lo pide", /Escribe el motivo/.test((await say(ADMIN, `/rechazar ${draft.id}`))!));
 await say(ADMIN, `/rechazar ${draft.id} Agrega el precio del bistec`);
@@ -112,6 +114,24 @@ enqueueOrderPaid(order.order.id);
 check("El aviso de pedido pagado le llega al dueño (no a MERCHANT_WA_ID)", outbox(`order-paid:${order.order.id}:merchant`)?.recipient === PEPE);
 
 console.log("─── Cancelar y límites ───");
+// Un borrador con un pedido de /probar sin pagar sí se puede borrar
+const tryOwner = "tg-7";
+store.upsertCustomer(tryOwner, "Prueba");
+await say(tryOwner, "/vender");
+check("Quien está en medio del alta no cuenta para el límite", skipsChatLimit(tryOwner, "Abarrotes Lupita"));
+for (const answer of ["Abarrotes Lupita", "2", "1", "Calle 5 número 10", "saltar", "saltar", WALLET, "7485", "Leche 1 L, 28, 10", "sí"]) await say(tryOwner, answer);
+const lupita = store.getStoreByOwner(tryOwner)!;
+check("La lista de giros dice «otro giro», no «negocio»", /5\. otro giro/.test((await say("tg-8", "/vender")) + ((await say("tg-8", "Tienda X")) ?? "")));
+await say("tg-8", "/cancelar");
+store.createOrder(lupita.id, tryOwner, [{ productId: store.listProducts(lupita.id)[0].id, quantity: 1 }]);
+await say(tryOwner, "/vender");
+check("/cancelar borra un borrador con pedidos de prueba sin pagar", /Borré tu borrador/.test((await say(tryOwner, "/cancelar"))!) && store.getStore(lupita.id) === undefined);
+const pending = store.createStore({ id: "con-pago", name: "Con pago", merchant: WALLET, status: "draft", owner: "tg-9" });
+const paidProduct = Number(db.prepare("INSERT INTO products (store_id, name, price_atomic, stock) VALUES ('con-pago', 'x', 1000000, 5)").run().lastInsertRowid);
+store.upsertCustomer("tg-9", "x");
+const paidOrder = store.createOrder("con-pago", "tg-9", [{ productId: paidProduct, quantity: 1 }]);
+store.markOrderPaid(paidOrder.order.id, "0xdef");
+check("Un borrador con un pedido PAGADO no se borra", pending.ok && !store.deleteUnpublishedStore("con-pago") && Boolean(store.getStore("con-pago")));
 await say("tg-4", "/vender");
 check("/cancelar antes de crear la tienda → borra el avance", /Borré tu borrador/.test((await say("tg-4", "/cancelar"))!) && (await say("tg-4", "hola")) === null);
 check("Otra tienda con el mismo nombre → otro id (-2)", slugFor("Carnicería Don Pepe") === "carniceria-don-pepe-2");

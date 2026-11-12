@@ -149,6 +149,8 @@ export interface TelegramWebhookOptions {
   discard?: (msg: IncomingMessage) => void;
   /** Aviso a quien excedió el límite. */
   notifyLimited?: (customerId: string) => void;
+  /** Mensajes que no cuentan para el límite (no llaman al agente): administrador, alta de comerciantes. */
+  exempt?: (msg: IncomingMessage) => boolean;
   perUser?: { max: number; windowMs: number };
 }
 
@@ -168,7 +170,7 @@ export function registerTelegramWebhook(app: Hono, options: TelegramWebhookOptio
 
     // Primero el duplicado (Telegram reintenta si tardamos): un reintento no cuenta para el límite
     if (!options.save(msg)) return c.text("OK", 200);
-    const limit = limiter.allow(msg.from);
+    const limit = options.exempt?.(msg) ? { ok: true, warn: false } : limiter.allow(msg.from);
     if (!limit.ok) {
       options.discard?.(msg);
       if (limit.warn) options.notifyLimited?.(msg.from);
