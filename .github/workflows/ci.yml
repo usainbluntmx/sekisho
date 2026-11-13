@@ -62,11 +62,9 @@ jobs:
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
-      - run: npm run test:safety
-      - run: npm run test:distribution
-      - run: npm run test:security
-      - run: npm run test:inbox
-      - run: npm run test:catalog
+      - run: npm run build
+      # Las 12 baterías (incluye la página de pago por HTTP en test:orders)
+      - run: npm test
 
   demo-api:
     name: Demo API

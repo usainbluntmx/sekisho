@@ -40,7 +40,7 @@ export function formatReport(facts: Facts, alerts: Alert[]): string {
 
   lines.push("", "Servicios");
   for (const e of facts.endpoints) {
-    lines.push(`  ${e.ok ? "✅" : "⚠️"} ${e.label}: ${e.status ? `HTTP ${e.status}` : (e.error ?? "sin respuesta")}${e.ms !== undefined ? ` · ${e.ms} ms` : ""}`);
+    lines.push(`  ${e.ok ? "✅" : "⚠️"} ${e.label}: ${e.error ?? (e.status ? `HTTP ${e.status}` : "sin respuesta")}${e.ms !== undefined ? ` · ${e.ms} ms` : ""}`);
   }
 
   lines.push("", "Directorio de servicios (402 verificado sin pagar)");

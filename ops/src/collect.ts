@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { probeService, validateDirectory, type Directory } from "./services.js";
-import type { Facts, Net, Watch } from "./types.js";
+import type { EndpointExpect, Facts, Net, Watch } from "./types.js";
 
 const OPS_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -191,7 +191,8 @@ export async function collect(
       const { value: res, ms } = await timed(() =>
         fetch(e.url, { signal: AbortSignal.timeout(10_000), headers: { "user-agent": "sekisho-ops" } })
       );
-      facts.endpoints.push({ label: e.label, url: e.url, ok: res.ok, status: res.status, ms });
+      const problem = endpointProblem(e.expect, res.status, res.headers.get("content-type"));
+      facts.endpoints.push({ label: e.label, url: e.url, ok: problem === null, status: res.status, ms, ...(problem ? { error: problem } : {}) });
     } catch (error) {
       facts.endpoints.push({ label: e.label, url: e.url, ok: false, error: (error as Error).message.split("\n")[0] });
     }
@@ -233,4 +234,15 @@ export async function collect(
   }
 
   return facts;
+}
+
+/** null si la respuesta es la esperada; si no, el motivo en una línea. */
+export function endpointProblem(expect: EndpointExpect | undefined, status: number, contentType: string | null): string | null {
+  const type = (contentType ?? "").toLowerCase();
+  if (!expect) return status >= 200 && status < 300 ? null : `HTTP ${status}`;
+  const statusOk = expect.status === undefined ? status >= 200 && status < 300 : status === expect.status;
+  const typeOk = expect.contentType === undefined || type.includes(expect.contentType.toLowerCase());
+  if (statusOk && typeOk) return null;
+  const want = [expect.status !== undefined ? `HTTP ${expect.status}` : "2xx", expect.contentType].filter(Boolean).join(" ");
+  return `esperaba ${want}, llegó HTTP ${status} ${type.split(";")[0] || "sin content-type"}`;
 }

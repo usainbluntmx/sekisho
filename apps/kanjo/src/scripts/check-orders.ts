@@ -113,6 +113,39 @@ check("'por kilo', 'KG' y 'kilo' → kg; otra cosa → pieza", normalizeUnit("po
 const extracted = normalizeItems([{ name: "Bistec", price: 150, unit: "kg" }], { currency: "USD", sourceUrl: "https://x", maxItems: 10 });
 check("Un producto importado con unit kg queda por kilo", extracted.items[0]?.unit === "kg" && extracted.items[0].price_atomic === 150_000_000);
 
+console.log("─── Página de pago por HTTP (el link que recibe el cliente) ───");
+{
+  const { Hono } = await import("hono");
+  const { registerCheckoutPage } = await import("../checkout.js");
+  const { paymentUrl } = await import("../tools.js");
+  const app = new Hono();
+  registerCheckoutPage(app);
+
+  const live = store.createOrder("don-pepe", "5215550001", [{ productId: tortillas, quantity: 1 }]).order;
+  const url = new URL(paymentUrl(live)!);
+  const path = url.pathname + url.search;
+  const ok = await app.request(path);
+  const okBody = await ok.text();
+  check(
+    "El link de pago responde 200 con la página (text/html)",
+    ok.status === 200 && (ok.headers.get("content-type") ?? "").includes("text/html") && okBody.includes(live.id)
+  );
+  check("La página usa la tienda del pedido", okBody.includes("Carnicería Don Pepe"));
+
+  const lower = await app.request(`/pay/${live.id.toLowerCase()}?t=${live.pay_token}`);
+  check("El id en minúsculas también abre el pedido", lower.status === 200);
+
+  const badToken = await app.request(`/pay/${live.id}?t=token-falso`);
+  check(
+    "Token inválido → 404 con la página HTML (no el 404 genérico)",
+    badToken.status === 404 && (badToken.headers.get("content-type") ?? "").includes("text/html")
+  );
+  const noToken = await app.request(`/pay/${live.id}`);
+  check("Sin token → 404 HTML", noToken.status === 404 && (noToken.headers.get("content-type") ?? "").includes("text/html"));
+  const unknown = await app.request("/pay/NOEXISTE?t=x");
+  check("Pedido inexistente → 404 HTML", unknown.status === 404 && (unknown.headers.get("content-type") ?? "").includes("text/html"));
+}
+
 db.close();
 cleanup();
 console.log(failures === 0 ? "\n✅ Todas las pruebas pasaron" : `\n❌ ${failures} prueba(s) fallaron`);

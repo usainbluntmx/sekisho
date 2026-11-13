@@ -79,7 +79,39 @@ function logPaymentAttempt(c: Context, orderId: string): void {
   console.warn(`[checkout] 402 con firma y sin encabezados x402 (pedido ${orderId})`);
 }
 
+/**
+ * Página de pago: es el link que reciben WhatsApp, Telegram y el agente (`/pay/<pedido>?t=<token>`).
+ * Usa la tienda del pedido, no un STORE_ID fijo. Sin token válido responde la página de
+ * "pedido no encontrado" (HTML), nunca el 404 genérico.
+ */
+export function registerCheckoutPage(app: Hono): void {
+  app.get("/pay/:orderId", (c) => {
+    const orderId = c.req.param("orderId").toUpperCase();
+    const token = c.req.query("t") ?? "";
+    if (!hasValidToken(orderId, token)) return c.html(renderNotFound(), 404);
+
+    const found = getOrder(orderId);
+    const store = found ? getStore(found.order.store_id) : undefined;
+    if (!found || !store) return c.html(renderNotFound(), 404);
+
+    return c.html(
+      renderCheckoutPage({
+        store,
+        order: found.order,
+        items: found.items,
+        usdc: sekisho.config.usdc,
+        chainId: sekisho.config.chain.id,
+        explorer: EXPLORER,
+        payToken: token,
+      })
+    );
+  });
+}
+
 export function registerCheckout(app: Hono): void {
+  // 1) Página de pago
+  registerCheckoutPage(app);
+
   const resourceServer = new x402ResourceServer(toFacilitatorClient(facilitator)).register(
     NETWORK,
     new ExactEvmScheme()

@@ -14,7 +14,7 @@ What it watches is in [`watch.json`](watch.json) (public addresses, minimum bala
 | Alert | Condition |
 | --- | --- |
 | Low AVAX | An operator is below its `minAvax`: without gas, payments are not settled |
-| Endpoint down | Non-2xx or no answer in 10 s |
+| Endpoint down | Non-2xx or no answer in 10 s. An endpoint with `expect` must return that exact status and content type instead: Kanjō's payment page is requested with a fake order and must answer `404` in HTML (the store's "order not found" page); a plain-text `404` means the route is gone |
 | Overdue split | Pending ≥ the merchant's `splitAtUsdc`, or ≥ 0.25 USDC with the last payment more than 26 h ago |
 | Metrics stalled | The indexer is more than 900 blocks behind the chain |
 | Admin event | Fee, treasury or ownership change on the factory; any executed transaction or owner change on the Safe |

@@ -170,3 +170,17 @@ test("Telegram: valida el token, parte mensajes largos y nunca expone el token e
     return true;
   });
 });
+
+test("endpoint con respuesta esperada: la página de pago de Kanjō", async () => {
+  const { endpointProblem } = await import("../src/collect.js");
+  const expect = { status: 404, contentType: "text/html" };
+  assert.equal(endpointProblem(expect, 404, "text/html; charset=UTF-8"), null);
+  // El 404 genérico de Hono (texto plano) significa que la ruta desapareció
+  assert.equal(endpointProblem(expect, 404, "text/plain; charset=UTF-8"), "esperaba HTTP 404 text/html, llegó HTTP 404 text/plain");
+  assert.match(endpointProblem(expect, 502, null)!, /llegó HTTP 502 sin content-type/);
+  // Sin expect: cualquier 2xx está bien
+  assert.equal(endpointProblem(undefined, 200, "text/html"), null);
+  assert.equal(endpointProblem(undefined, 503, "text/html"), "HTTP 503");
+  const page = (watchJson as Watch).endpoints.find((e) => e.url.includes("/pay/"));
+  assert.deepEqual(page?.expect, expect);
+});

@@ -25,7 +25,7 @@ export function evaluate(facts: Facts, rules: Watch["rules"]): Alert[] {
     if (!e.ok) {
       alerts.push({
         key: `down:${e.label}`,
-        text: `${e.label} no responde bien: ${e.status ? `HTTP ${e.status}` : (e.error ?? "sin respuesta")} (${e.url})`,
+        text: `${e.label} no responde bien: ${e.error ?? (e.status ? `HTTP ${e.status}` : "sin respuesta")} (${e.url})`,
       });
     }
   }

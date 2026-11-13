@@ -1,5 +1,11 @@
 import type { Address, Hash } from "viem";
 
+export interface EndpointExpect {
+  status?: number;
+  /** Fragmento que debe aparecer en el Content-Type, p. ej. "text/html". */
+  contentType?: string;
+}
+
 export type Net = "avalanche" | "avalancheFuji";
 
 export const NET_LABEL: Record<Net, string> = { avalanche: "mainnet", avalancheFuji: "Fuji" };
@@ -16,7 +22,12 @@ export interface Watch {
       }
     >
   >;
-  endpoints: { label: string; url: string }[];
+  /**
+   * `expect` es opcional: por defecto basta un 2xx. Sirve para vigilar rutas que deben
+   * responder algo concreto, p. ej. la página de pago de Kanjō con un pedido falso
+   * (404 en HTML = la ruta existe; 404 en texto plano = la ruta desapareció).
+   */
+  endpoints: { label: string; url: string; expect?: EndpointExpect }[];
   metricsUrl: string;
   /** Directorio publicado en el sitio (ruta relativa a ops/). */
   servicesFile: string;

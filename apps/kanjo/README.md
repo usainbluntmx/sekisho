@@ -19,7 +19,7 @@ Customer's wallet signs EIP-3009 (no gas) ─▶ POST /api/pay (x402)
 ```
 
 - **Agent:** Claude through the Anthropic API, with three tools: `catalog_list`, `order_create` and `order_status`. Products, prices and stock come from the store database through those tools.
-- **Payment link:** each order gets a random 128-bit token. Without it, `/pay/<order>` returns 404.
+- **Payment link:** each order gets a random 128-bit token. Without it, `/pay/<order>` returns the "order not found" page (404). The page uses the order's own store. `npm test` requests it over HTTP, CI runs all 12 test suites, and the [monitor](../../ops/README.md) checks in production that the route still answers.
 - **Checkout:** a page that asks the customer's wallet for one EIP-3009 signature. The operator key submits it and pays the gas; the customer only needs USDC.
 - **Split:** USDC lands in the store's SplitVault. The [SDK distributor](../../sdk/README.md) splits in batches (≥ 5 USDC, or after 24 h once at least 0.25 USDC is pending), so gas stays below the fee.
 
@@ -206,7 +206,7 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store, weight/expiry, template, Telegram and onboarding checks |
+| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store, weight/expiry and payment page (HTTP), template, Telegram and onboarding checks. CI runs all of them |
 | `npm run store:create` | Preview and create a store (id, name, wallet, optional profile) |
 | `npm run store:template -- <type>` | Example profile and catalog to edit for a business type |
 | `npm run catalog:load -- <store> <file>` | Preview and load a catalog from a JSON file |

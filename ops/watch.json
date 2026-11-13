@@ -25,6 +25,7 @@
   "endpoints": [
     { "label": "Sekisho API", "url": "https://sekisho-api.zerotwolabs.xyz/health" },
     { "label": "Kanjō", "url": "https://kanjo.zerotwolabs.xyz/" },
+    { "label": "Kanjō · página de pago", "url": "https://kanjo.zerotwolabs.xyz/pay/MONITOR?t=x", "expect": { "status": 404, "contentType": "text/html" } },
     { "label": "Sitio", "url": "https://sekisho.zerotwolabs.xyz/" }
   ],
   "metricsUrl": "https://sekisho-api.zerotwolabs.xyz/v1/metrics",

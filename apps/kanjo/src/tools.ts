@@ -33,7 +33,7 @@ export interface ToolResult {
 }
 
 /** Link de pago con su token secreto. */
-function paymentUrl(order: Order): string | undefined {
+export function paymentUrl(order: Order): string | undefined {
   if (!order.pay_token) return undefined;
   return `${PUBLIC_BASE_URL}/pay/${order.id}?t=${order.pay_token}`;
 }
