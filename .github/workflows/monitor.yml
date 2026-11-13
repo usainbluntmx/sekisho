@@ -4,7 +4,9 @@ name: Monitor
 # Secrets del repo: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (opcionales: AVALANCHE_RPC_URL, FUJI_RPC_URL).
 on:
   schedule:
-    - cron: "*/30 * * * *" # cada 30 min: avisa solo lo que cambió
+    # ~cada 30 min (avisa solo lo que cambió). En los minutos 13 y 43, no en :00/:30: GitHub retrasa
+    # (y bajo mucha carga descarta) las corridas programadas, sobre todo al inicio de cada hora
+    - cron: "13,43 * * * *"
     - cron: "7 14 * * *" # 14:07 UTC = 08:07 en Ciudad de México: resumen diario
   workflow_dispatch:
     inputs:

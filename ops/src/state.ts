@@ -36,10 +36,31 @@ export interface NotifyPlan {
 }
 
 /**
- * Decide qué avisar: alertas nuevas y resueltas siempre; las que siguen abiertas,
- * solo cada `remindEveryHours` para no llenar el chat.
+ * Prefijos de alertas que esta corrida no pudo evaluar porque su fuente falló
+ * (SEKISHO-BUG-013): si la RPC de una red no responde, sus alertas de saldo y reparto no
+ * están "resueltas", simplemente no se vieron.
  */
-export function planNotification(prev: State, alerts: Alert[], now: Date, remindEveryHours: number): NotifyPlan {
+export function blindedPrefixes(errors: { key: string }[]): string[] {
+  const prefixes: string[] = [];
+  for (const { key } of errors) {
+    const [source, network, address] = key.split(":");
+    const addr = address?.toLowerCase();
+    if (source === "metrics") prefixes.push("metrics:");
+    else if (source === "rpc" && network) prefixes.push(`avax:${network}:`, `split:${network}:`, `stale:${network}:`);
+    else if (source === "balance" && network && addr) prefixes.push(`avax:${network}:${addr}`);
+    else if (source === "vault" && network && addr) prefixes.push(`split:${network}:${addr}`, `stale:${network}:${addr}`);
+    else if (source === "services") prefixes.push("service:");
+    else if (source === "ci") prefixes.push("ci:");
+  }
+  return prefixes;
+}
+
+/**
+ * Decide qué avisar: alertas nuevas y resueltas siempre; las que siguen abiertas,
+ * solo cada `remindEveryHours` para no llenar el chat. Una alerta abierta cuya fuente
+ * falló en esta corrida (`blind`) se conserva tal cual: no se da por resuelta.
+ */
+export function planNotification(prev: State, alerts: Alert[], now: Date, remindEveryHours: number, blind: string[] = []): NotifyPlan {
   const iso = now.toISOString();
   const next: State = { alerts: {}, adminScannedTo: { ...prev.adminScannedTo } };
   const opened: Alert[] = [];
@@ -58,9 +79,13 @@ export function planNotification(prev: State, alerts: Alert[], now: Date, remind
   }
 
   const current = new Set(alerts.map((a) => a.key));
+  const unseen = (key: string) => blind.some((prefix) => key.startsWith(prefix));
+  for (const [key, value] of Object.entries(prev.alerts)) {
+    if (!current.has(key) && unseen(key)) next.alerts[key] = value; // sin datos: sigue abierta
+  }
   const resolved = Object.entries(prev.alerts)
     // los eventos de administración son avisos únicos: no se "resuelven"
-    .filter(([key]) => !current.has(key) && !key.startsWith("admin:"))
+    .filter(([key]) => !current.has(key) && !key.startsWith("admin:") && !unseen(key))
     .map(([, value]) => value.text);
 
   return { opened, ongoing, resolved, shouldSend: opened.length + ongoing.length + resolved.length > 0, next };

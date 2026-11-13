@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { collect } from "./collect.js";
 import { formatNotification, formatReport } from "./report.js";
 import { evaluate } from "./rules.js";
-import { loadState, planNotification, saveState } from "./state.js";
+import { blindedPrefixes, loadState, planNotification, saveState } from "./state.js";
 import { sendTelegram, telegramFromEnv } from "./telegram.js";
 import type { Net, Watch } from "./types.js";
 
@@ -37,7 +37,7 @@ try {
   const report = formatReport(facts, alerts);
   console.log(report);
 
-  const plan = planNotification(prev, alerts, facts.at, watch.rules.remindEveryHours);
+  const plan = planNotification(prev, alerts, facts.at, watch.rules.remindEveryHours, blindedPrefixes(facts.errors));
   for (const [net, block] of Object.entries(facts.adminScannedTo)) plan.next.adminScannedTo[net as Net] = block.toString();
 
   if (summary) await sendTelegram(telegram!, report);

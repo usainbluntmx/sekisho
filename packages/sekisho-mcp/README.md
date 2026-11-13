@@ -54,7 +54,7 @@ Other clients: register a local (stdio) MCP server that runs `npx -y @zero-two-l
 | `SEKISHO_MAX_PER_CALL` | `0.01` | Max USDC per tool call |
 | `SEKISHO_MAX_PER_DAY` | `0.10` | Max USDC in any 24 h window |
 | `SEKISHO_PAYER_KEY_FILE` | `~/.config/sekisho/payer.key` | Private key file (`0x` + 64 hex, mode 600) |
-| `SEKISHO_LEDGER_FILE` | `~/.config/sekisho/spend.json` | Spend log used for the 24 h cap |
+| `SEKISHO_LEDGER_FILE` | `~/.config/sekisho/spend.json` | Spend log used for the 24 h cap. Several proxies can share it (for example OpenCode and Claude Code with the same wallet): checking the cap and recording a payment happen under a file lock (`spend.json.lock`), so together they never go over the cap. If the lock stays busy for 5 s, the call is refused and nothing is paid |
 
 Agents call paid tools on their own initiative, not only when you ask: keep the caps low. A signed payment counts toward the cap even if the server then fails to settle it. Logs go to stderr; stdout is the MCP protocol.
 

@@ -9,12 +9,12 @@
     "subfolder": "packages/sekisho-mcp"
   },
   "websiteUrl": "https://sekisho.zerotwolabs.xyz/services/",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@zero-two-labs/sekisho-mcp",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "transport": {
         "type": "stdio"
       },

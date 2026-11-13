@@ -60,12 +60,20 @@ export async function createProxy(options: ProxyOptions) {
         denial = `La tool "${toolName}" cuesta ${usdc(amount)} USDC, más que tu tope por llamada (${usdc(maxPerCall)}). No se pagó.`;
         return false;
       }
-      const spent = ledger.spentLast24h(caip2);
-      if (spent + amount > maxPerDay) {
+      // Revisar el tope y registrar el pago es un solo paso con candado: otro proxy con la misma
+      // wallet no puede colarse entre los dos
+      let reservation;
+      try {
+        reservation = ledger.reserve({ at: new Date().toISOString(), network: caip2, amount: amount.toString(), tool: toolName }, maxPerDay);
+      } catch (error) {
+        denial = (error as Error).message;
+        return false;
+      }
+      const { spent } = reservation;
+      if (!reservation.ok) {
         denial = `Tope de 24 h alcanzado: llevas ${usdc(spent)} de ${usdc(maxPerDay)} USDC; esta llamada cuesta ${usdc(amount)}. No se pagó.`;
         return false;
       }
-      ledger.record({ at: new Date().toISOString(), network: caip2, amount: amount.toString(), tool: toolName });
       log(`[sekisho-mcp] Pagando ${usdc(amount)} USDC por "${toolName}" (24 h: ${usdc(spent + amount)} de ${usdc(maxPerDay)})`);
       return true;
     },

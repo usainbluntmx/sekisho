@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseEther, parseUnits, type Address, type Hash } from "viem";
 import { evaluate } from "../src/rules.js";
-import { emptyState, loadState, planNotification, saveState } from "../src/state.js";
+import { blindedPrefixes, emptyState, loadState, planNotification, saveState } from "../src/state.js";
 import { formatNotification, formatReport } from "../src/report.js";
 import { chunks, sendTelegram, telegramFromEnv } from "../src/telegram.js";
 import type { Facts, Watch } from "../src/types.js";
@@ -183,4 +183,30 @@ test("endpoint con respuesta esperada: la página de pago de Kanjō", async () =
   assert.equal(endpointProblem(undefined, 503, "text/html"), "HTTP 503");
   const page = (watchJson as Watch).endpoints.find((e) => e.url.includes("/pay/"));
   assert.deepEqual(page?.expect, expect);
+});
+
+test("una alerta abierta no se da por resuelta si su fuente falló (SEKISHO-BUG-013)", () => {
+  const t0 = new Date("2026-11-13T10:00:00Z");
+  const OPX = "0xB4841B636051fE20748E6723a5dB9336b5568732";
+  const low = { key: `avax:avalanche:${OPX.toLowerCase()}`, text: "operador sin gas" };
+  const opened = planNotification(emptyState(), [low], t0, 6);
+
+  // Corrida siguiente: la RPC de mainnet no responde → no hay alerta de saldo, pero tampoco se sabe si se arregló
+  const errors = [{ key: "rpc:avalanche" }];
+  const blind = blindedPrefixes(errors);
+  const rpcDown = { key: "error:rpc:avalanche", text: "No se pudo leer la RPC de avalanche" };
+  const p = planNotification(opened.next, [rpcDown], new Date(t0.getTime() + 30 * 60_000), 6, blind);
+  assert.deepEqual(p.resolved, [], "no se avisa como resuelta");
+  assert.ok(p.next.alerts[low.key], "sigue abierta en el estado");
+  assert.equal(p.next.alerts[low.key].since, opened.next.alerts[low.key].since);
+  assert.deepEqual(p.opened.map((a) => a.key), ["error:rpc:avalanche"], "lo que sí se avisa es que la fuente cayó");
+
+  // La RPC vuelve y el saldo ya está bien → ahora sí se resuelve
+  const back = planNotification(p.next, [], new Date(t0.getTime() + 60 * 60_000), 6, []);
+  assert.deepEqual(back.resolved.sort(), ["No se pudo leer la RPC de avalanche", "operador sin gas"]);
+
+  // Cada fuente cubre solo lo suyo
+  assert.deepEqual(blindedPrefixes([{ key: `balance:avalanche:${OPX}` }]), [`avax:avalanche:${OPX.toLowerCase()}`]);
+  assert.deepEqual(blindedPrefixes([{ key: "metrics" }, { key: "ci" }, { key: "services" }]), ["metrics:", "ci:", "service:"]);
+  assert.deepEqual(blindedPrefixes([{ key: "services:file" }]), ["service:"]);
 });
