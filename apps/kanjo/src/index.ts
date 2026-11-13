@@ -21,10 +21,10 @@ import { NETWORK } from "./network.js";
 import { facilitator, operator, sekisho } from "./payments/usdc-sekisho.js";
 import { registerMcp, MCP_PATH } from "./mcp.js";
 import { startOutboxWorker } from "./outbox.js";
-import { skipsChatLimit } from "./onboarding.js";
+import { expireStaleDrafts, skipsChatLimit } from "./onboarding.js";
 import { expireOrders, orderTtlMinutes } from "./store.js";
 import { isSettling } from "./settlement-guard.js";
-import { recoverPaidNotifications } from "./notify.js";
+import { devChatSender, recoverPaidNotifications } from "./notify.js";
 import { limitBody, rateLimit, safeEqual } from "./security.js";
 import { sendWhatsAppVoiceNote, downloadWhatsAppMedia, transcribeAudio, whatsappVoiceEnabled } from "./voice.js";
 import { shouldReplyWithVoice, spokenText } from "./voice-text.js";
@@ -77,6 +77,7 @@ if (MCP_ON) {
       facilitator,
       network: `eip155:${sekisho.config.chain.id}`,
       maxPendingOrders: Number(process.env.MCP_MAX_PENDING ?? 20),
+      maxPendingPerClient: Number(process.env.MCP_MAX_PENDING_PER_CLIENT ?? 3),
     },
     rateLimit({ max: Number(process.env.MCP_PER_MINUTE ?? 60), windowMs: 60_000 })
   );
@@ -205,7 +206,8 @@ if (DEV_CHAT_TOKEN) {
     const body = await c.req.json<{ from?: string; name?: string; text?: string }>();
     if (!body.text) return c.json({ error: "Falta el campo text" }, 400);
 
-    const from = body.from ?? "5215500000000";
+    // Siempre "dev-…": nunca se puede hacer pasar por el admin ni por un cliente real
+    const from = devChatSender(body.from);
     const replies: string[] = [];
 
     // Misma cola por cliente que el webhook: mensajes en orden
@@ -225,6 +227,18 @@ if (DEV_CHAT_TOKEN) {
 // Limpieza diaria del buzón (mensajes ya resueltos)
 pruneInbox();
 setInterval(() => pruneInbox(), 24 * 60 * 60 * 1000).unref();
+
+// Limpieza diaria de borradores de tiendas abandonados (libera el cupo de altas)
+function sweepStaleDrafts(): void {
+  try {
+    const removed = expireStaleDrafts();
+    if (removed.length) console.log(`[alta] ${removed.length} borrador(es) sin actividad borrado(s): ${removed.join(", ")}`);
+  } catch (error) {
+    console.error("[alta] No se pudieron limpiar los borradores:", error);
+  }
+}
+sweepStaleDrafts();
+setInterval(sweepStaleDrafts, 24 * 60 * 60 * 1000).unref();
 
 // Buzón: reprocesar los mensajes que quedaron pendientes si el proceso se detuvo
 const pendingMessages = recoverPendingMessages();

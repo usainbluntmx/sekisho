@@ -15,8 +15,12 @@ const token = () => process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
 
 export const TELEGRAM_PATH = "/telegram/webhook";
 export const TELEGRAM_PREFIX = "tg-";
-/** Texto máximo que se le pasa al agente (más largo se corta). */
-export const MAX_TEXT = 1000;
+/**
+ * Tope de un mensaje entrante: el mismo que Telegram (4096). No se corta antes porque el alta
+ * de comerciantes recibe catálogos de hasta 100 renglones; el tope de lo que llega al agente
+ * vive en bot.ts (AGENT_MAX_TEXT).
+ */
+export const MAX_TEXT = 4096;
 
 export function isTelegramCustomer(id: string): boolean {
   return id.startsWith(TELEGRAM_PREFIX);
@@ -82,12 +86,39 @@ export async function sendTelegramText(customerId: string, text: string): Promis
     return;
   }
   const chat_id = chatIdOf(customerId);
-  try {
-    await call("sendMessage", { chat_id, text: toTelegramHtml(text), parse_mode: "HTML", link_preview_options: { is_disabled: true } });
-  } catch (error) {
-    if (!/can't parse entities/i.test((error as Error).message)) throw error;
-    await call("sendMessage", { chat_id, text, link_preview_options: { is_disabled: true } });
+  for (const part of splitForTelegram(text)) {
+    try {
+      await call("sendMessage", { chat_id, text: toTelegramHtml(part), parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+    } catch (error) {
+      if (!/can't parse entities/i.test((error as Error).message)) throw error;
+      await call("sendMessage", { chat_id, text: part, link_preview_options: { is_disabled: true } });
+    }
   }
+}
+
+/**
+ * Telegram rechaza mensajes de más de 4096 caracteres. Se parten por renglones con margen
+ * (el HTML escapado crece: "&" → "&amp;"); un renglón larguísimo se corta a la fuerza.
+ */
+export function splitForTelegram(text: string, max = 3500): string[] {
+  if (text.length <= max) return [text];
+  const parts: string[] = [];
+  let current = "";
+  for (const line of text.split("\n")) {
+    for (let piece = line; ; ) {
+      const head = piece.slice(0, max);
+      const candidate = current ? `${current}\n${head}` : head;
+      if (candidate.length <= max) current = candidate;
+      else {
+        parts.push(current);
+        current = head;
+      }
+      piece = piece.slice(max);
+      if (!piece) break;
+    }
+  }
+  if (current) parts.push(current);
+  return parts;
 }
 
 /** Descarga una nota de voz (2 pasos: getFile → archivo). */

@@ -54,6 +54,7 @@ if (env.WHATSAPP_TOKEN && !env.WHATSAPP_APP_SECRET) {
 // Catálogo desde URL (Firecrawl) y voz (ElevenLabs): apagadas no cambian nada
 if (env.MCP_CHANNEL && !["on", "off"].includes(env.MCP_CHANNEL)) problems.push('MCP_CHANNEL: debe ser "on" u "off"');
 positiveNumber("MCP_MAX_PENDING");
+positiveNumber("MCP_MAX_PENDING_PER_CLIENT");
 positiveNumber("MCP_PER_MINUTE");
 
 // Telegram: con el canal encendido hacen falta el token del bot (BotFather) y el secreto del webhook
@@ -72,6 +73,7 @@ if (env.MERCHANT_ONBOARDING === "on") {
   required("FX_MXN_PER_USDC", (v) => Number(v) > 0, "pesos por 1 USDC, por ejemplo 18.5: los comerciantes dan precios en pesos");
 }
 positiveNumber("ONBOARDING_MAX_DRAFTS");
+positiveNumber("ONBOARDING_DRAFT_DAYS");
 
 // Caducidad de pedidos sin pagar: minutos enteros entre 5 y 10080 (7 días)
 if (env.ORDER_TTL_MINUTES) {

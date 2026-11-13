@@ -89,6 +89,46 @@ function maxDrafts(): number {
   return Number(process.env.ONBOARDING_MAX_DRAFTS ?? 50);
 }
 
+function draftDays(): number {
+  return Number(process.env.ONBOARDING_DRAFT_DAYS ?? 14);
+}
+
+/**
+ * Libera el cupo de altas (ONBOARDING_MAX_DRAFTS): borra los borradores sin actividad en
+ * ONBOARDING_DRAFT_DAYS días y las altas a medias igual de viejas. Nunca toca tiendas en
+ * revisión o publicadas, ni un borrador con algún pedido pagado. Avisa al dueño.
+ */
+export function expireStaleDrafts(days = draftDays()): string[] {
+  const age = `-${Math.max(1, Math.floor(days))} days`;
+  const stale = db
+    .prepare(
+      `SELECT s.id, s.name, s.owner FROM stores s
+       LEFT JOIN onboarding o ON o.owner = s.owner
+       WHERE s.status = 'draft' AND s.created_at < datetime('now', ?)
+         AND (o.updated_at IS NULL OR o.updated_at < datetime('now', ?))`
+    )
+    .all(age, age) as { id: string; name: string; owner: string | null }[];
+
+  const removed: string[] = [];
+  for (const s of stale) {
+    if (!deleteUnpublishedStore(s.id)) continue;
+    removed.push(s.id);
+    if (s.owner) {
+      end(s.owner);
+      enqueueNotification(
+        `store-expired:${s.id}`,
+        s.owner,
+        `Borré el borrador de *${s.name}* porque no tuvo movimiento en ${Math.floor(days)} días. Cuando quieras, empieza de nuevo con /vender 🙂`
+      );
+    }
+  }
+  // Altas que nunca llegaron a crear la tienda (sin aviso: no hay nada que perder)
+  db.prepare(
+    "DELETE FROM onboarding WHERE updated_at < datetime('now', ?) AND owner NOT IN (SELECT owner FROM stores WHERE owner IS NOT NULL)"
+  ).run(age);
+  return removed;
+}
+
 // ─────────────── Sesión ───────────────
 
 function load(owner: string): { step: Step; draft: Draft } | undefined {
@@ -174,7 +214,12 @@ function prompt(step: Step, draft: Draft): string {
   }
 }
 
-function catalogPreview(items: CatalogItem[]): string {
+/** Cerca del tope de Telegram (4096): una lista más larga llega partida en dos mensajes. */
+const NEAR_TELEGRAM_LIMIT = 3800;
+const SPLIT_HINT =
+  "⚠️ Tu mensaje llegó casi al límite de Telegram (4096 caracteres). Si tu lista era más larga, Telegram la partió en otro mensaje y aquí falta el resto: revisa que estén todos tus productos, o mándame una lista más corta (nombres breves).";
+
+function catalogPreview(items: CatalogItem[], message = ""): string {
   // El precio en pesos de vuelta (≈) para que se note si algo se leyó mal, por ejemplo "1,200" como 1 peso
   const fx = Number(process.env.FX_MXN_PER_USDC);
   const mxn = (atomic: number) => (fx > 0 ? ` (≈${Math.round((atomic / 1_000_000) * fx)} MXN)` : "");
@@ -182,7 +227,8 @@ function catalogPreview(items: CatalogItem[]): string {
     (i) =>
       `• ${i.name} — ${priceLabel(i.price_atomic, i.unit)}${mxn(i.price_atomic)}${i.stock !== undefined ? ` · hay ${formatQuantity(i.stock, i.unit)}` : ""}`
   );
-  return `${items.length} productos (precios convertidos a USDC):\n${lines.join("\n")}\n\n¿Así está bien? Responde *sí* para guardarlos, o mándame la lista corregida.`;
+  const hint = message.length >= NEAR_TELEGRAM_LIMIT ? `\n\n${SPLIT_HINT}` : "";
+  return `${items.length} productos (precios convertidos a USDC):\n${lines.join("\n")}${hint}\n\n¿Así está bien? Responde *sí* para guardarlos, o mándame la lista corregida.`;
 }
 
 async function panel(store: Store): Promise<string> {
@@ -500,9 +546,12 @@ export async function handleMerchant(from: string, text: string): Promise<string
 
     case "catalog": {
       const parsed = parseCatalogLines(message);
-      if (!parsed.ok) return [`Hay algo que corregir (no guardé nada):\n• ${parsed.problems.join("\n• ")}\n\nMándame la lista otra vez.`];
+      if (!parsed.ok) {
+        const hint = message.length >= NEAR_TELEGRAM_LIMIT ? `\n\n${SPLIT_HINT}` : "";
+        return [`Hay algo que corregir (no guardé nada):\n• ${parsed.problems.join("\n• ")}${hint}\n\nMándame la lista otra vez.`];
+      }
       save(from, "catalogConfirm", { ...draft, catalog: parsed.items });
-      return [catalogPreview(parsed.items)];
+      return [catalogPreview(parsed.items, message)];
     }
 
     case "catalogConfirm": {
@@ -511,7 +560,7 @@ export async function handleMerchant(from: string, text: string): Promise<string
         const parsed = parseCatalogLines(message);
         if (!parsed.ok) return [`Hay algo que corregir (no guardé nada):\n• ${parsed.problems.join("\n• ")}\n\nO responde *sí* para guardar la lista anterior.`];
         save(from, "catalogConfirm", { ...draft, catalog: parsed.items });
-        return [catalogPreview(parsed.items)];
+        return [catalogPreview(parsed.items, message)];
       }
       const items = draft.catalog ?? [];
 

@@ -4,6 +4,9 @@ import { runAgent } from "./agent.js";
 import { handleMerchant } from "./onboarding.js";
 
 
+/** Lo que se le pasa al agente de un solo mensaje (protege el gasto); el alta recibe el texto completo. */
+export const AGENT_MAX_TEXT = 1000;
+
 export interface ChatMessage {
   from: string;
   name: string;
@@ -68,7 +71,7 @@ export async function handleMessage(msg: ChatMessage, reply: Reply): Promise<voi
       store,
       customerWaId: msg.from,
       customerName: msg.name,
-      text: msg.text,
+      text: msg.text.slice(0, AGENT_MAX_TEXT),
       voice: msg.type === "audio",
     });
     await reply(msg.from, answer, { voice: msg.type === "audio" });

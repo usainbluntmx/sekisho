@@ -18,7 +18,7 @@ globalThis.fetch = (async () =>
 
 const { db } = await import("../db.js");
 const store = await import("../store.js");
-const { handleMerchant, slugFor, skipsChatLimit } = await import("../onboarding.js");
+const { handleMerchant, slugFor, skipsChatLimit, expireStaleDrafts } = await import("../onboarding.js");
 const { parseCatalogLines } = await import("../catalog-lines.js");
 const { enqueueOrderPaid } = await import("../notify.js");
 
@@ -136,6 +136,30 @@ await say("tg-4", "/vender");
 check("/cancelar antes de crear la tienda → borra el avance", /Borré tu borrador/.test((await say("tg-4", "/cancelar"))!) && (await say("tg-4", "hola")) === null);
 check("Otra tienda con el mismo nombre → otro id (-2)", slugFor("Carnicería Don Pepe") === "carniceria-don-pepe-2");
 check("Un nombre que es comando no se vuelve id", slugFor("Vender") === "vender-2" && store.validateNewStore({ id: "vender", name: "x y", merchant: WALLET }).some((p) => /reservado/.test(p)));
+console.log("─── Borradores abandonados ───");
+{
+  const old = (id: string, owner: string, status: "draft" | "pending" = "draft") => {
+    store.createStore({ id, name: `Tienda ${id}`, merchant: WALLET, status, owner });
+    db.prepare("UPDATE stores SET created_at = datetime('now', '-20 days') WHERE id = ?").run(id);
+  };
+  old("vieja-sola", "tg-20");
+  old("vieja-activa", "tg-21");
+  db.prepare("INSERT INTO onboarding (owner, step, data) VALUES ('tg-21', 'catalog', '{}')").run(); // siguió editando hoy
+  old("vieja-revision", "tg-22", "pending");
+  store.createStore({ id: "nueva", name: "Tienda nueva", merchant: WALLET, status: "draft", owner: "tg-23" });
+  db.prepare("UPDATE stores SET created_at = datetime('now', '-20 days') WHERE id = 'con-pago'").run();
+  db.prepare("INSERT INTO onboarding (owner, step, data, updated_at) VALUES ('tg-24', 'hours', '{}', datetime('now', '-20 days'))").run();
+
+  const removed = expireStaleDrafts(14);
+  check("Un borrador sin movimiento en 14 días se borra", removed.includes("vieja-sola") && store.getStore("vieja-sola") === undefined);
+  check("…y su dueño recibe el aviso", outbox("store-expired:vieja-sola")?.recipient === "tg-20" && /\/vender/.test(outbox("store-expired:vieja-sola")?.body ?? ""));
+  check("Un borrador viejo cuyo dueño sigue editando se conserva", Boolean(store.getStore("vieja-activa")));
+  check("Una tienda en revisión nunca se borra sola", Boolean(store.getStore("vieja-revision")));
+  check("Un borrador reciente se conserva", Boolean(store.getStore("nueva")));
+  check("Un borrador viejo con un pedido pagado se conserva", Boolean(store.getStore("con-pago")) && !removed.includes("con-pago"));
+  check("Un alta a medias de hace 20 días se limpia", !db.prepare("SELECT 1 FROM onboarding WHERE owner = 'tg-24'").get());
+  check("Correr la limpieza otra vez no borra nada más", expireStaleDrafts(14).length === 0);
+}
 process.env.ONBOARDING_MAX_DRAFTS = "0";
 check("Con el tope de borradores lleno → no se aceptan altas nuevas", /no estamos recibiendo/.test((await say("tg-5", "/vender"))!));
 process.env.MERCHANT_ONBOARDING = "off";

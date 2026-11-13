@@ -55,7 +55,25 @@ check("Nota de voz → audio con su file_id", voice?.type === "audio" && voice.a
 check("Grupos → se ignoran", tg.parseTelegramUpdate({ update_id: 3, message: { chat: { id: -1, type: "group" }, from: { is_bot: false }, text: "x" } }) === null);
 check("Mensajes de bots → se ignoran", tg.parseTelegramUpdate(update(4, { from: { id: 9, is_bot: true }, text: "x" })) === null);
 check("Mensajes editados → se ignoran", tg.parseTelegramUpdate({ update_id: 5, edited_message: { chat: { type: "private" } } }) === null);
-check("Texto muy largo → se corta a 1000 caracteres", tg.parseTelegramUpdate(update(6, { text: "a".repeat(5000) }))?.text?.length === 1000);
+check("Texto más largo que Telegram → se corta a 4096", tg.parseTelegramUpdate(update(6, { text: "a".repeat(5000) }))?.text?.length === 4096);
+{
+  // SEKISHO-BUG-015: un catálogo de 50 productos (≈1,500 caracteres) llega completo al alta
+  const { parseCatalogLines } = await import("../catalog-lines.js");
+  const list = Array.from({ length: 50 }, (_, i) => `Clavo para madera de ${i + 1} pulgadas, ${10 + i}`).join("\n");
+  const received = tg.parseTelegramUpdate(update(60, { text: list }))?.text ?? "";
+  const parsed = parseCatalogLines(received, 18.5);
+  check(`Catálogo de 50 productos (${list.length} caracteres) → llegan los 50`, received === list && parsed.ok && parsed.items.length === 50);
+}
+console.log("─── Mensajes largos de salida ───");
+{
+  const long = Array.from({ length: 120 }, (_, i) => `• Producto número ${i + 1} — 12.34 USDC / kg (≈230 MXN) · hay 10 kg`).join("\n");
+  const parts = tg.splitForTelegram(long);
+  check(`Una vista previa de ${long.length} caracteres se parte en ${parts.length} mensajes de ≤ 3500`, parts.length > 1 && parts.every((p) => p.length <= 3500));
+  check("…sin perder ni cortar renglones", parts.join("\n") === long);
+  check("Un texto corto va en un solo mensaje", tg.splitForTelegram("hola").length === 1);
+  const oneHugeLine = "x".repeat(8000);
+  check("Un renglón larguísimo se corta a la fuerza", tg.splitForTelegram(oneHugeLine).every((p) => p.length <= 3500) && tg.splitForTelegram(oneHugeLine).join("") === oneHugeLine);
+}
 
 console.log("─── Formato ───");
 check("*Negritas* de WhatsApp → <b> de Telegram", tg.toTelegramHtml("*Total:* 5.21 USDC") === "<b>Total:</b> 5.21 USDC");

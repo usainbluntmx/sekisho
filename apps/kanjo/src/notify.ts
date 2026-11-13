@@ -34,9 +34,20 @@ export function isAgentCustomer(waId: string): boolean {
   return waId.startsWith("mcp-");
 }
 
+/** Clientes del chat de prueba por HTTP (`dev-…`, solo con DEV_CHAT_TOKEN). */
+export function isDevCustomer(waId: string): boolean {
+  return waId.startsWith("dev-");
+}
+
+/** Remitente de /dev/chat: siempre con prefijo "dev-" y solo letras, números y guiones. */
+export function devChatSender(requested: string | undefined): string {
+  const clean = (requested ?? "").replace(/[^a-z0-9-]/gi, "").slice(0, 40);
+  return `dev-${clean || "tester"}`;
+}
+
 /** Clientes sin un canal directo de mensajes: a ellos no se les envían avisos. */
 function hasNoDirectChannel(waId: string): boolean {
-  return isWebCustomer(waId) || isAgentCustomer(waId);
+  return isWebCustomer(waId) || isAgentCustomer(waId) || isDevCustomer(waId);
 }
 
 /** Cómo se muestra el cliente en los avisos a la tienda. */

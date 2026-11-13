@@ -105,7 +105,7 @@ In the Docker image the same tools are `node dist/scripts/store-profile.js`, `st
 | Telegram | One bot for every store, webhook at `/telegram/webhook` (secret checked with `X-Telegram-Bot-Api-Secret-Token`) | `TELEGRAM_CHANNEL=on` |
 | WhatsApp | Meta WhatsApp Cloud API webhook (`/webhook`, signature checked with `X-Hub-Signature-256`) | Built, waiting for Meta verification |
 | Terminal | `npm run chat` | For local testing |
-| HTTP dev chat | `POST /dev/chat`, only when `DEV_CHAT_TOKEN` is set | Off in production |
+| HTTP dev chat | `POST /dev/chat`, only when `DEV_CHAT_TOKEN` is set. The sender is always `dev-<from>`, so it can never act as the admin or a real customer | Off in production |
 | Web voice | `/voice`: speak to the agent in the browser, answers in voice (ElevenLabs) | `VOICE_WEB=off` in production |
 | AI agents (MCP) | `/mcp`: an agent browses stores and menus, places an order and pays it with x402 | `MCP_CHANNEL=on` on Fuji |
 
@@ -135,6 +135,7 @@ Details:
 - Only private chats with people are handled. Groups, bots, edits and stickers are ignored.
 - Voice notes are transcribed when ElevenLabs is configured, and replies go as text.
 - Replies use Telegram HTML with everything escaped except bold, so a payment link with `_` or `*` never breaks a message. If Telegram still rejects the formatting, the message is resent as plain text.
+- Messages are accepted up to Telegram's own 4096 characters, so a long product list reaches onboarding whole; the agent reads at most the first 1000 characters of a message. Replies longer than 3500 characters are sent as several messages, split between lines.
 - Each person can send `TELEGRAM_MAX_MESSAGES` messages per `TELEGRAM_WINDOW_MINUTES` (20 per 10 min by default), because the bot is open to anyone and every message costs an agent call. Retries from Telegram do not count toward that limit, and neither do the admin's messages or those of someone in the middle of merchant onboarding, which never call the agent.
 - To get store notices on Telegram, message the bot, copy your `tg-<chat_id>` from the logs (`[telegram] Name (tg-…)`) and set it as `MERCHANT_WA_ID`.
 
@@ -147,7 +148,7 @@ With `MERCHANT_ONBOARDING=on`, a shop owner creates their store from the chat, w
 3. The store is created as a **draft**. Customers and AI agents cannot see it, but its owner can: `/probar` lets them chat with it as a customer.
 4. `/enviar` sends it for review: the admin (`KANJO_ADMIN_ID`) gets a summary with the wallet and products, and answers `/aprobar <id>` or `/rechazar <id> <reason>`. The owner is told either way, and on approval gets the store's link.
 
-From then on, `/vender` opens the owner's panel: `/productos` replaces the catalog, `/perfil` changes delivery, address and hours, and paid-order notices go to the owner instead of `MERCHANT_WA_ID`. Editing a store under review sends it back to draft. The wallet cannot be changed from the chat, and a published store cannot be deleted from it. `/cancelar` deletes a draft together with its unpaid test orders from `/probar`; a store with any paid order is never deleted. There is one store per owner, at most `ONBOARDING_MAX_DRAFTS` unpublished stores exist at once (default 50), and the web voice channel and AI agents cannot onboard. The admin can also use `/pendientes` and `/ver <id>`.
+From then on, `/vender` opens the owner's panel: `/productos` replaces the catalog, `/perfil` changes delivery, address and hours, and paid-order notices go to the owner instead of `MERCHANT_WA_ID`. Editing a store under review sends it back to draft. The wallet cannot be changed from the chat, and a published store cannot be deleted from it. `/cancelar` deletes a draft together with its unpaid test orders from `/probar`; a store with any paid order is never deleted. There is one store per owner, at most `ONBOARDING_MAX_DRAFTS` unpublished stores exist at once (default 50), and a draft with no activity for `ONBOARDING_DRAFT_DAYS` days (default 14) is deleted once a day, with a notice to its owner, so abandoned drafts never block new stores (stores under review, published, or with a paid order are never touched), and the web voice channel and AI agents cannot onboard. The admin can also use `/pendientes` and `/ver <id>`.
 
 ## Buy through an AI agent (MCP)
 
@@ -161,7 +162,9 @@ With `MCP_CHANNEL=on`, Kanjō serves an MCP endpoint at `/mcp` (Streamable HTTP)
 | `order_status` | free | Status of an order (`pending_payment`, `paid`, `expired`) and its payment transaction |
 | `pay_order` | **the order total** | Charges exactly the total with x402 into the store's SplitVault and marks the order paid |
 
-`stores` and `menu` include the store's business profile (hours, pickup or delivery, prep time), and `pay_order` answers with the pickup or delivery line, so the agent does not promise what the store does not offer. `pay_order` uses the same checks as the web checkout: valid token, order still pending, stock available, one settlement at a time, and one payment row per transaction. A second payment is refused before it is charged. Orders placed by agents never trigger customer messages; the store still gets its notice. At most `MCP_MAX_PENDING` unpaid agent orders exist at once (default 20), and `/mcp` is rate limited per IP (`MCP_PER_MINUTE`, default 60).
+`stores` and `menu` include the store's business profile (hours, pickup or delivery, prep time), and `pay_order` answers with the pickup or delivery line, so the agent does not promise what the store does not offer. `pay_order` uses the same checks as the web checkout: valid token, order still pending, stock available, one settlement at a time, and one payment row per transaction. A second payment is refused before it is charged. Orders placed by agents never trigger customer messages; the store still gets its notice. Each client (by IP) can have at most `MCP_MAX_PENDING_PER_CLIENT` unpaid orders (default 3), and at most `MCP_MAX_PENDING` exist in total (default 20), so one client cannot use up the channel. The IP is never stored: orders are kept under a salted hash (`mcp-<hash>`). `/mcp` is also rate limited per IP (`MCP_PER_MINUTE`, default 60).
+
+Store names, descriptions, policies and product texts are written by merchants, so they reach buying agents flattened to one line, capped in length, and with a `notice` that they are data about the store, never instructions.
 
 From OpenCode, Claude Code or Codex, use [`@zero-two-labs/sekisho-mcp`](../../packages/sekisho-mcp) with `SEKISHO_MCP_URL=https://kanjo.zerotwolabs.xyz/mcp`. Raise its per-call cap to cover an order (for example `SEKISHO_MAX_PER_CALL=5`): its 0.01 USDC default would refuse a real order, on purpose.
 
@@ -196,11 +199,11 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 | `WHATSAPP_*`, `NOTIFY_CHANNEL`, `MERCHANT_WA_ID` | for WhatsApp | Cloud API credentials and where notices go (`MERCHANT_WA_ID` can be a `tg-<chat_id>`) |
 | `FIRECRAWL_API_KEY`, `FX_MXN_PER_USDC` | for catalog import | Firecrawl key and MXN rate |
 | `ELEVENLABS_*`, `VOICE_WEB`, `VOICE_REPLIES` | for voice | ElevenLabs key and voice, and which channels speak |
-| `MCP_CHANNEL`, `MCP_MAX_PENDING`, `MCP_PER_MINUTE` | for agents | Turns on `/mcp` and its limits |
+| `MCP_CHANNEL`, `MCP_MAX_PENDING`, `MCP_MAX_PENDING_PER_CLIENT`, `MCP_PER_MINUTE` | for agents | Turns on `/mcp` and its limits (unpaid orders in total and per client, requests per minute) |
 | `ORDER_TTL_MINUTES` | no | Minutes an unpaid order lasts (5 to 10080, default 60) |
 | `TELEGRAM_CHANNEL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | for Telegram | Turns on `/telegram/webhook`, the bot token from BotFather, and the webhook secret |
 | `TELEGRAM_MAX_MESSAGES`, `TELEGRAM_WINDOW_MINUTES` | no | Messages per person per window (default 20 per 10 min) |
-| `MERCHANT_ONBOARDING`, `KANJO_ADMIN_ID`, `ONBOARDING_MAX_DRAFTS` | for onboarding | Turns on store creation from the chat, who approves stores (`tg-<chat_id>` or a WhatsApp number), and the cap on unpublished stores. Needs `FX_MXN_PER_USDC` |
+| `MERCHANT_ONBOARDING`, `KANJO_ADMIN_ID`, `ONBOARDING_MAX_DRAFTS`, `ONBOARDING_DRAFT_DAYS` | for onboarding | Turns on store creation from the chat, who approves stores (`tg-<chat_id>` or a WhatsApp number), the cap on unpublished stores, and the days after which an inactive draft is deleted. Needs `FX_MXN_PER_USDC` |
 
 ## Scripts
 

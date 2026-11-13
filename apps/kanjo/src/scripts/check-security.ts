@@ -97,6 +97,14 @@ const big = await limited.request("/x", { method: "POST", body: "a".repeat(MAX_B
 check("Un body normal pasa", small.status === 200);
 check("Un body mayor a 64 KB recibe 413 sin procesarse", big.status === 413);
 
+console.log("─── Chat de prueba /dev/chat (BUG-017) ───");
+{
+  const { devChatSender } = await import("../notify.js");
+  check("Pedir ser el admin (tg-…) → queda como dev-tg-…", devChatSender("tg-1221618666") === "dev-tg-1221618666");
+  check("Un número de WhatsApp tampoco se suplanta", devChatSender("5215512345678") === "dev-5215512345678");
+  check("Caracteres raros se quitan y sin from → dev-tester", devChatSender("a b/c<d>") === "dev-abcd" && devChatSender(undefined) === "dev-tester");
+}
+
 db.close();
 cleanup();
 
