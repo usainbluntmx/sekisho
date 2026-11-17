@@ -3,6 +3,7 @@ import { createSekishoDistributor, type DistributionDecision } from "@zero-two-l
 import { db } from "./db.js";
 import { sekisho } from "./payments/usdc-sekisho.js";
 import { policyFromEnv } from "./distribution-policy.js";
+import { recentPreviousWallets } from "./wallet-link.js";
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS distributions (
@@ -33,6 +34,19 @@ function listStores(): StoreRow[] {
   return db.prepare("SELECT id, merchant_address FROM stores").all() as unknown as StoreRow[];
 }
 
+/**
+ * Tiendas y también sus wallets anteriores (30 días tras un cambio): si a un vault viejo llegó
+ * algo después del cambio, se reparte igual, a la wallet anterior.
+ */
+function listVaultOwners(): StoreRow[] {
+  const current = listStores();
+  const seen = new Set(current.map((s) => getAddress(s.merchant_address)));
+  const previous = recentPreviousWallets()
+    .filter((w) => !seen.has(getAddress(w.address)))
+    .map((w) => ({ id: w.storeId, merchant_address: w.address }));
+  return [...current, ...previous];
+}
+
 /** Fecha del pago más antiguo de la tienda posterior a su último reparto (null si no hay). */
 function oldestUndistributedAt(storeId: string): Date | null {
   const row = db
@@ -51,7 +65,7 @@ function oldestUndistributedAt(storeId: string): Date | null {
 /** Repartidor del SDK; la antigüedad de los pagos sale de la base, así que sobrevive reinicios. */
 const distributor = createSekishoDistributor({
   sekisho,
-  merchants: () => listStores().map((store) => getAddress(store.merchant_address)),
+  merchants: () => [...new Set(listVaultOwners().map((store) => getAddress(store.merchant_address)))],
   policy: policyFromEnv(),
   log: (message) => console.log(message.replace("[sekisho]", "[distributor]")),
   onError: (error, merchant) =>
@@ -61,7 +75,7 @@ const distributor = createSekishoDistributor({
     ),
   onDistributed: ({ merchant, tx, total, fee, reason }) => {
     // Un vault por vendedor: el reparto se anota en la primera tienda de ese vendedor
-    const store = listStores().find((s) => getAddress(s.merchant_address) === merchant);
+    const store = listVaultOwners().find((s) => getAddress(s.merchant_address) === merchant);
     if (!store) return;
     db.prepare(
       `INSERT INTO distributions (store_id, tx, total_atomic, fee_atomic, reason)

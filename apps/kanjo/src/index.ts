@@ -5,6 +5,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { isValidSignature, parseIncomingMessages, sendText, type IncomingMessage } from "./whatsapp.js";
 import { handleMessage } from "./bot.js";
 import { registerCheckout } from "./checkout.js";
+import { registerWalletRoutes } from "./wallet-routes.js";
 import {
   enqueue,
   getInboxText,
@@ -64,6 +65,9 @@ app.use("/dev/chat", rateLimit({ max: 20, windowMs: 60_000 }));
 
 // Checkout web + cobro x402
 registerCheckout(app);
+
+// Firma de la wallet del comerciante (alta y cambio de wallet): /wallet/<token>
+registerWalletRoutes(app, rateLimit({ max: 30, windowMs: 60_000 }));
 
 // Canal de voz web (VOICE_WEB=on)
 registerVoiceWeb(app);

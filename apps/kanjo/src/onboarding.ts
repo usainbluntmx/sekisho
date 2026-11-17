@@ -30,6 +30,17 @@ import { applyCatalog, savePreview } from "./catalog-import.js";
 import { normalizeName, type CatalogItem } from "./catalog-normalize.js";
 import { formatQuantity, priceLabel } from "./units.js";
 import { storeLink, telegramUsername } from "./telegram.js";
+import {
+  applyWalletChange,
+  createWalletLink,
+  markWalletLink,
+  pendingWalletChange,
+  setWalletVerified,
+  walletLinkUrl,
+  walletVerifiedAt,
+  WALLET_LINK_MINUTES,
+  type WalletLink,
+} from "./wallet-link.js";
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS onboarding (
@@ -63,6 +74,8 @@ interface Draft {
   hours?: string;
   prepMinutes?: number;
   wallet?: string;
+  /** La wallet se confirmó con una firma (no copiando la dirección). */
+  walletVerified?: boolean;
   /** Productos ya validados, esperando el "sí". */
   catalog?: CatalogItem[];
 }
@@ -179,7 +192,20 @@ async function linkFor(store: Store): Promise<string> {
   }
 }
 
-function prompt(step: Step, draft: Draft): string {
+/** Link para firmar con la wallet (se crea uno nuevo cada vez: el anterior deja de servir). */
+function walletPrompt(owner: string, draft: Draft): string {
+  const link = createWalletLink(owner, draft.name ?? "tu tienda");
+  return (
+    "Ahora tu wallet en Avalanche: ahí te llegan tus ventas en USDC.\n\n" +
+    "Para comprobar que es tuya, abre este link *desde el navegador de tu wallet* (MetaMask, Core…) y firma el mensaje. " +
+    "Firmar no es una transacción: no mueve fondos ni cuesta gas.\n\n" +
+    `${walletLinkUrl(link)}\n\n` +
+    `El link dura ${WALLET_LINK_MINUTES} min. Si vence, escribe /wallet y te mando otro.\n` +
+    "⚠️ Usa una wallet que controles tú, no la dirección de depósito de un exchange (no puede firmar)."
+  );
+}
+
+function prompt(step: Step, draft: Draft, owner?: string): string {
   switch (step) {
     case "name":
       return "¿Cómo se llama tu negocio? (así lo verán tus clientes)";
@@ -196,9 +222,8 @@ function prompt(step: Step, draft: Draft): string {
     case "prep":
       return "¿En cuántos minutos queda listo un pedido normalmente? (solo el número, o *saltar*)";
     case "wallet":
-      return "Pega la dirección de tu wallet en Avalanche (empieza con 0x). Ahí te llegan tus ventas en USDC.\n\n⚠️ Revísala bien: *no se puede cambiar desde el chat*.";
-    case "walletConfirm":
-      return `Recibí:\n${draft.wallet}\n\nPara confirmar que es la correcta, escribe sus *últimos 4 caracteres*.`;
+    case "walletConfirm": // sesiones de antes de la firma: se les manda el link
+      return owner ? walletPrompt(owner, draft) : "Escribe /wallet para recibir el link y firmar con tu wallet.";
     case "catalog": {
       const template = draft.businessType ? TEMPLATES[draft.businessType] : undefined;
       const example = template ? linesFromTemplate(template.catalog.items.slice(0, 4)) : "Producto de ejemplo, 50\nOtro producto, 120, kg, 5";
@@ -237,6 +262,7 @@ async function panel(store: Store): Promise<string> {
     `🏪 *${store.name}* (${store.id})`,
     `Estado: ${STATUS_LABEL[store.status]}`,
     `Productos: ${products}`,
+    `Wallet: ${shortAddress(store.merchant_address)} ${walletVerifiedAt(store.id) ? "✅ firmada" : "⚠️ sin firmar (fírmala con /wallet)"}`,
     `Al pagar, tu cliente lee: "${fulfillmentLine(store.profile)}"`,
   ];
   if (store.status === "published") lines.push(`\nTu link para compartir:\n${await linkFor(store)}`);
@@ -244,7 +270,8 @@ async function panel(store: Store): Promise<string> {
     "",
     "/probar — habla con tu tienda como cliente",
     "/productos — cambiar tus productos",
-    "/perfil — cambiar entrega, dirección y horario"
+    "/perfil — cambiar entrega, dirección y horario",
+    "/wallet — firmar tu wallet o cambiarla por otra"
   );
   if (store.status === "draft") lines.push("/enviar — mandarla a revisión para publicarla");
   if (store.status !== "published") lines.push("/cancelar — borrar el borrador");
@@ -259,7 +286,7 @@ function summaryForAdmin(store: Store): string {
     `🆕 *Tienda para revisar:* ${store.name} (${store.id})`,
     `Giro: ${BUSINESS_TYPES[p.businessType]}`,
     `Dueño: ${store.owner}`,
-    `Wallet: ${store.merchant_address}`,
+    `Wallet: ${store.merchant_address} ${walletVerifiedAt(store.id) ? "(✅ firmada)" : "(⚠️ sin firma)"}`,
     `Dirección: ${p.address || "—"} · Zona: ${p.deliveryArea || "—"}`,
     `Horario: ${p.hours || "—"} · Tiempo: ${p.prepMinutes ? `${p.prepMinutes} min` : "—"}`,
     `Productos (${products.length}):`,
@@ -322,16 +349,41 @@ function backToDraftIfPending(store: Store): string {
 
 async function handleAdmin(text: string): Promise<string[] | null> {
   const [command, id, ...rest] = text.trim().split(/\s+/);
-  const needsId = ["/ver", "/aprobar", "/rechazar"].includes(command.toLowerCase());
+  const needsId = ["/ver", "/aprobar", "/rechazar", "/aprobarwallet", "/rechazarwallet"].includes(command.toLowerCase());
   if (needsId && !id) {
     const pending = listStoresByStatus("pending");
     const hint = pending.length ? `\nEn revisión: ${pending.map((s) => s.id).join(", ")}` : "\nNo hay tiendas en revisión.";
-    return [`Falta el id de la tienda: ${command.toLowerCase()} <id>${command.toLowerCase() === "/rechazar" ? " <motivo>" : ""}${hint}`];
+    return [`Falta el id de la tienda: ${command.toLowerCase()} <id>${["/rechazar", "/rechazarwallet"].includes(command.toLowerCase()) ? " <motivo>" : ""}${hint}`];
   }
   switch (command.toLowerCase()) {
     case "/pendientes": {
       const pending = listStoresByStatus("pending");
-      return [pending.length ? `Tiendas en revisión:\n${pending.map((s) => `• ${s.name} — /ver ${s.id}`).join("\n")}` : "No hay tiendas en revisión."];
+      const wallets = listStoresByStatus("published").filter((s) => pendingWalletChange(s.id));
+      return [
+        (pending.length ? `Tiendas en revisión:\n${pending.map((s) => `• ${s.name} — /ver ${s.id}`).join("\n")}` : "No hay tiendas en revisión.") +
+          (wallets.length ? `\n\nCambios de wallet por aprobar:\n${wallets.map((s) => `• ${s.name} — /aprobarwallet ${s.id}`).join("\n")}` : ""),
+      ];
+    }
+    case "/aprobarwallet": {
+      const store = id ? getStore(id) : undefined;
+      const change = store ? pendingWalletChange(store.id) : undefined;
+      if (!store || !change) return ["Esa tienda no tiene un cambio de wallet por aprobar. Usa /pendientes."];
+      const result = await applyWalletChange(change.token);
+      if (!result.ok) return [`No se aplicó: ${result.error}`];
+      notifyWalletChanged(result.store, result.oldAddress, result.splitTx);
+      return [`✅ Wallet de ${store.name} cambiada: ${result.oldAddress} → ${result.store.merchant_address}${result.splitTx ? `\nReparto previo del vault anterior: ${result.splitTx}` : ""}`];
+    }
+    case "/rechazarwallet": {
+      const store = id ? getStore(id) : undefined;
+      const change = store ? pendingWalletChange(store.id) : undefined;
+      if (!store || !change) return ["Esa tienda no tiene un cambio de wallet por aprobar. Usa /pendientes."];
+      const reason = rest.join(" ").trim();
+      if (!reason) return [`Escribe el motivo: /rechazarwallet ${store.id} <motivo>`];
+      markWalletLink(change.token, "rejected");
+      if (store.owner) {
+        enqueueNotification(`wallet-rejected:${change.token}`, store.owner, `No cambiamos la wallet de *${store.name}*: ${reason}\n\nTus cobros siguen llegando a ${shortAddress(store.merchant_address)}.`);
+      }
+      return [`↩️ Cambio de wallet de ${store.name} rechazado. Se le avisó al comerciante.`];
     }
     case "/ver": {
       const store = id ? getStore(id) : undefined;
@@ -400,7 +452,7 @@ export async function handleMerchant(from: string, text: string): Promise<string
       save(from, "panel", {});
       return [await panel(store)];
     }
-    if (session) return ["Seguimos donde te quedaste 🙂", prompt(session.step, session.draft)];
+    if (session) return ["Seguimos donde te quedaste 🙂", prompt(session.step, session.draft, from)];
     if (listStoresByStatus("draft").length + listStoresByStatus("pending").length >= maxDrafts()) {
       return ["Por ahora no estamos recibiendo tiendas nuevas. Inténtalo más tarde 🙏"];
     }
@@ -438,6 +490,17 @@ export async function handleMerchant(from: string, text: string): Promise<string
       case "/perfil":
         save(from, "fulfillment", { businessType: store.profile.businessType });
         return [prompt("fulfillment", {})];
+      case "/wallet": {
+        const link = createWalletLink(from, store.name, store.id);
+        return [
+          "Abre este link *desde el navegador de la wallet* que quieres usar y firma el mensaje (no cuesta gas):\n\n" +
+            `${walletLinkUrl(link)}\n\n` +
+            "• Si firmas con la misma wallet que ya tienes, solo queda marcada como firmada.\n" +
+            "• Si firmas con otra, primero reparto lo pendiente a tu wallet actual y luego tus cobros van a la nueva." +
+            (store.status === "published" ? " Como tu tienda está publicada, el cambio lo revisamos antes de aplicarlo." : "") +
+            `\n\nEl link dura ${WALLET_LINK_MINUTES} min.`,
+        ];
+      }
       case "/enviar": {
         if (store.status !== "draft") return [`Tu tienda está ${STATUS_LABEL[store.status].toLowerCase()}.`];
         if (listProducts(store.id).length === 0) return ["Tu tienda no tiene productos. Agrégalos con /productos."];
@@ -453,9 +516,12 @@ export async function handleMerchant(from: string, text: string): Promise<string
     }
   }
 
+  // /wallet en el paso de la wallet: link nuevo (el anterior venció o se perdió)
+  if (lower === "/wallet" && (step === "wallet" || step === "walletConfirm")) return [prompt("wallet", draft, from)];
+
   // Un comando a mitad del alta no se toma como respuesta (por ejemplo "/probar" como horario)
   if (message.startsWith("/") && step !== "panel") {
-    return ["Ese comando no aplica en este paso. Termina de responder, o usa /salir para pausar o /cancelar para borrar.", prompt(step, draft)];
+    return ["Ese comando no aplica en este paso. Termina de responder, o usa /salir para pausar o /cancelar para borrar.", prompt(step, draft, from)];
   }
 
   // ── Respuestas a cada paso
@@ -524,24 +590,17 @@ export async function handleMerchant(from: string, text: string): Promise<string
         return [`✅ Perfil actualizado.${note}`, await panel(getStore(store.id)!)];
       }
       save(from, "wallet", next);
-      return [prompt("wallet", next)];
+      return [prompt("wallet", next, from)];
     }
 
-    case "wallet": {
-      const problem = walletProblem(message);
-      if (problem) return [`Esa dirección no sirve: ${problem}. Pégala otra vez.`];
-      const next = { ...draft, wallet: message };
-      save(from, "walletConfirm", next);
-      return [prompt("walletConfirm", next)];
-    }
-
+    case "wallet":
     case "walletConfirm": {
-      if (message.toLowerCase() !== draft.wallet?.slice(-4).toLowerCase()) {
-        save(from, "wallet", { ...draft, wallet: undefined });
-        return ["No coinciden 🙈 Por seguridad, pega tu wallet otra vez.", prompt("wallet", draft)];
-      }
-      save(from, "catalog", draft);
-      return ["✅ Wallet confirmada.", prompt("catalog", draft)];
+      // La wallet ya no se pega: se confirma firmando desde el link (así se prueba que es suya)
+      const pasted = !walletProblem(message);
+      return [
+        (pasted ? "Ya no hace falta pegar la dirección: " : "") +
+          "para seguir, abre el link que te mandé desde el navegador de tu wallet y firma. ¿Venció o lo perdiste? Escribe /wallet y te mando otro.",
+      ];
     }
 
     case "catalog": {
@@ -586,6 +645,7 @@ export async function handleMerchant(from: string, text: string): Promise<string
         save(from, "name", {});
         return [`No pude crear la tienda: ${created.problems.join("; ")}. Empecemos de nuevo.`, prompt("name", {})];
       }
+      if (draft.walletVerified) setWalletVerified(created.store.id);
       applyCatalog(savePreview({ storeId: created.store.id, source: "chat", currency: "MXN", items }).id, "merge");
       save(from, "panel", {});
       return [
@@ -595,4 +655,92 @@ export async function handleMerchant(from: string, text: string): Promise<string
     }
   }
   return null;
+}
+
+// ─────────────── Wallet firmada (llega desde la página /wallet/<token>) ───────────────
+
+function shortAddress(address: string): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function notifyWalletChanged(store: Store, oldAddress: string, splitTx?: string): void {
+  if (!store.owner) return;
+  enqueueNotification(
+    `wallet-changed:${store.id}:${Date.now()}`,
+    store.owner,
+    `✅ Listo: los cobros de *${store.name}* ahora llegan a ${shortAddress(store.merchant_address)}.` +
+      (splitTx ? `\n\nAntes repartí lo pendiente a tu wallet anterior (${shortAddress(oldAddress)}).` : "")
+  );
+}
+
+/**
+ * Sigue el flujo después de una firma válida y devuelve lo que la página le muestra al comerciante.
+ * Alta: guarda la wallet y pasa a los productos. Cambio: lo aplica (o lo manda a revisión si la
+ * tienda está publicada). Misma wallet: solo la marca como firmada.
+ */
+export async function onWalletVerified(link: WalletLink): Promise<{ ok: boolean; message: string }> {
+  const address = link.address!;
+
+  // Alta de una tienda nueva
+  if (!link.store_id) {
+    const session = load(link.owner);
+    if (!session || (session.step !== "wallet" && session.step !== "walletConfirm") || getStoreByOwner(link.owner)) {
+      markWalletLink(link.token, "rejected");
+      return { ok: false, message: "Tu alta ya no está esperando la wallet. Escribe /vender en el chat para ver dónde vas." };
+    }
+    const next: Draft = { ...session.draft, wallet: address, walletVerified: true };
+    save(link.owner, "catalog", next);
+    markWalletLink(link.token, "applied");
+    enqueueNotification(`wallet-ok:${link.token}`, link.owner, `✅ Wallet verificada: ${shortAddress(address)}\n\n${prompt("catalog", next)}`);
+    return { ok: true, message: "✅ Wallet verificada. Regresa al chat para seguir con tus productos." };
+  }
+
+  const store = getStore(link.store_id);
+  if (!store || store.owner !== link.owner) {
+    markWalletLink(link.token, "rejected");
+    return { ok: false, message: "Esta tienda ya no está a tu nombre." };
+  }
+
+  // Misma wallet: solo queda firmada
+  if (store.merchant_address.toLowerCase() === address.toLowerCase()) {
+    setWalletVerified(store.id);
+    markWalletLink(link.token, "applied");
+    enqueueNotification(`wallet-ok:${link.token}`, link.owner, `✅ Tu wallet ${shortAddress(address)} quedó firmada.`);
+    return { ok: true, message: "✅ Tu wallet quedó firmada. Puedes regresar al chat." };
+  }
+
+  // Tienda publicada: el cambio lo revisa el administrador antes de aplicarlo
+  if (store.status === "published") {
+    const admin = adminId();
+    if (!admin) {
+      markWalletLink(link.token, "rejected");
+      return { ok: false, message: "Ahora mismo no hay quién revise el cambio. Intenta más tarde." };
+    }
+    enqueueNotification(
+      `wallet-review:${link.token}`,
+      admin,
+      [
+        `🔑 *Cambio de wallet por revisar:* ${store.name} (${store.id})`,
+        `Dueño: ${store.owner}`,
+        `Actual: ${store.merchant_address}`,
+        `Nueva (firmada): ${address}`,
+        "",
+        `/aprobarwallet ${store.id}`,
+        `/rechazarwallet ${store.id} <motivo>`,
+      ].join("\n")
+    );
+    enqueueNotification(`wallet-sent:${link.token}`, link.owner, `📨 Recibí la firma de ${shortAddress(address)}. Como tu tienda está publicada, revisamos el cambio y te aviso por aquí.`);
+    return { ok: true, message: "📨 Firma recibida. Revisamos el cambio y te avisamos en el chat." };
+  }
+
+  // Borrador o en revisión: se aplica ya
+  const result = await applyWalletChange(link.token);
+  if (!result.ok) {
+    markWalletLink(link.token, "rejected");
+    return { ok: false, message: `${result.error} Pide otro link con /wallet.` };
+  }
+  const note = backToDraftIfPending(store);
+  notifyWalletChanged(result.store, result.oldAddress, result.splitTx);
+  if (note) enqueueNotification(`wallet-draft:${link.token}`, link.owner, note.trim());
+  return { ok: true, message: "✅ Wallet cambiada. Regresa al chat." };
 }

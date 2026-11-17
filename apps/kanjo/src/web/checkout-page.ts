@@ -13,7 +13,7 @@ const CHECKOUT_JS_VERSION = (() => {
   }
 })();
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -21,7 +21,7 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function layout(title: string, body: string): string {
+export function layout(title: string, body: string): string {
   return `<!doctype html>
 <html lang="es">
 <head>
