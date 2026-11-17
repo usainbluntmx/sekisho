@@ -175,7 +175,10 @@ export function createStore(input: NewStore): { ok: true; store: Store } | { ok:
 export function getCustomerStore(waId: string): Store | undefined {
   const row = db.prepare("SELECT store_id FROM customers WHERE wa_id = ?").get(waId) as { store_id: string | null } | undefined;
   const chosen = row?.store_id ? getStore(row.store_id) : undefined;
-  return chosen && isVisibleTo(chosen, waId) ? chosen : getStore(DEFAULT_STORE_ID);
+  if (chosen && isVisibleTo(chosen, waId)) return chosen;
+  // La tienda por defecto solo si está visible (en mainnet la demo queda oculta: sin tienda elegida, no hay tienda)
+  const fallback = getStore(DEFAULT_STORE_ID);
+  return fallback && isVisibleTo(fallback, waId) ? fallback : undefined;
 }
 
 /** Cambia la tienda de un cliente. Devuelve false si no existe o el cliente no la puede ver (y no cambia nada). */

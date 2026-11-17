@@ -127,6 +127,19 @@ if (!hasColumn("orders", "pay_token")) {
   db.exec("ALTER TABLE orders ADD COLUMN pay_token TEXT");
 }
 
+// Índices (SEKISHO-PERF-002): los barridos de cada minuto y las búsquedas por tienda o cliente
+// dejan de recorrer las tablas completas. Van después de las migraciones (usan columnas nuevas).
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_orders_status_expires ON orders (status, expires_at);
+  CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders (customer_wa_id, status);
+  CREATE INDEX IF NOT EXISTS idx_orders_store_status ON orders (store_id, status);
+  CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items (order_id);
+  CREATE INDEX IF NOT EXISTS idx_payments_order ON payments (order_id);
+  CREATE INDEX IF NOT EXISTS idx_products_store_active ON products (store_id, active);
+  CREATE INDEX IF NOT EXISTS idx_stores_owner ON stores (owner);
+  CREATE INDEX IF NOT EXISTS idx_stores_status ON stores (status);
+`);
+
 
 /**
  * Pedidos pendientes creados antes de que existiera pay_token: se les asigna uno para que

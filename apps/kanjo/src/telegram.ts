@@ -143,8 +143,23 @@ export async function telegramWebhookInfo(): Promise<{ url: string; pending_upda
   return call("getWebhookInfo", {});
 }
 
+/**
+ * Usuario del bot, en caché 1 h (SEKISHO-PERF-004): antes se pedía a Telegram en cada panel.
+ * Sin Telegram configurado no llama a nada y lanza (quien lo usa muestra otra indicación).
+ */
+let usernameCache: { value: string; at: number } | null = null;
+const USERNAME_TTL_MS = 60 * 60_000;
 export async function telegramUsername(): Promise<string> {
-  return ((await call("getMe", {})) as { username: string }).username;
+  if (!telegramConfigured()) throw new Error("Telegram no está configurado");
+  if (usernameCache && Date.now() - usernameCache.at < USERNAME_TTL_MS) return usernameCache.value;
+  const value = ((await call("getMe", {})) as { username: string }).username;
+  usernameCache = { value, at: Date.now() };
+  return value;
+}
+
+/** Para pruebas: olvida el usuario guardado. */
+export function resetTelegramUsernameCache(): void {
+  usernameCache = null;
 }
 
 /** Link para compartir de una tienda. */

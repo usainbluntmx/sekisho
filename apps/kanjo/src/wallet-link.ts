@@ -14,6 +14,7 @@ import { getAddress, isAddress, recoverMessageAddress, type Address, type Hex } 
 import { db } from "./db.js";
 import { getStore, type Store } from "./store.js";
 import { isSettling } from "./settlement-guard.js";
+import { oneLine } from "./errors.js";
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS wallet_links (
@@ -216,7 +217,7 @@ export async function applyWalletChange(token: string): Promise<ApplyResult> {
   try {
     if ((await chain.pendingAtomic(oldAddress)) > 0n) splitTx = await chain.distribute(oldAddress);
   } catch (error) {
-    console.error(`[wallet] No se pudo repartir el vault anterior de ${store.id}:`, error);
+    console.error(`[wallet] No se pudo repartir el vault anterior de ${store.id}: ${oneLine(error)}`);
     return { ok: false, error: "No pude repartir lo pendiente del vault anterior; no cambié nada. Intenta más tarde." };
   }
 

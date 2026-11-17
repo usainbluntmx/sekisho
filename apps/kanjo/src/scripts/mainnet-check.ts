@@ -11,7 +11,7 @@
 import { erc20Abi, getAddress, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { createSekishoClient } from "@zero-two-labs/sekisho";
-import { listStoresByStatus } from "../store.js";
+import { DEFAULT_STORE_ID, listStoresByStatus } from "../store.js";
 import { walletVerifiedAt } from "../wallet-link.js";
 import { evaluateMainnet, formatReport, type MainnetFacts } from "../mainnet-check.js";
 import { oneLine } from "../errors.js";
@@ -48,7 +48,7 @@ for (const s of listStoresByStatus("published")) {
   } catch (error) {
     payTo = { ok: false, error: (error as { shortMessage?: string }).shortMessage ?? (error as Error).message.split("\n")[0] };
   }
-  stores.push({ id: s.id, name: s.name, merchant: s.merchant_address, verified: walletVerifiedAt(s.id) !== null, owner: s.owner, payTo });
+  stores.push({ id: s.id, name: s.name, merchant: s.merchant_address, verified: walletVerifiedAt(s.id) !== null, owner: s.owner, demo: s.id === DEFAULT_STORE_ID, payTo });
 }
 
 const lines = evaluateMainnet({

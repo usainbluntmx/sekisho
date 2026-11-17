@@ -4,6 +4,13 @@ import { getStore, setStoreProfile } from "../store.js";
 
 const STORE_ID = process.env.STORE_ID ?? "cafe-kanjo";
 const STORE_NAME = process.env.STORE_NAME ?? "Café Kanjō";
+// La tienda demo (Café Kanjō) vive solo en Fuji: en mainnet no se crea y, si ya existía, se oculta
+if (process.env.NETWORK === "avalanche") {
+  const hidden = Number(db.prepare("UPDATE stores SET status = 'draft' WHERE id = ? AND status = 'published'").run(STORE_ID).changes);
+  console.log(`✔ Mainnet: ${STORE_NAME} es la demo de Fuji y no se publica${hidden ? " (se ocultó)" : ""}`);
+  process.exit(0);
+}
+
 const MERCHANT = process.env.MERCHANT_ADDRESS;
 if (!MERCHANT) throw new Error("Falta MERCHANT_ADDRESS en .env");
 
@@ -11,6 +18,9 @@ db.prepare(
   `INSERT INTO stores (id, name, merchant_address) VALUES (?, ?, ?)
    ON CONFLICT(id) DO UPDATE SET name = excluded.name, merchant_address = excluded.merchant_address`
 ).run(STORE_ID, STORE_NAME, MERCHANT);
+
+// En Fuji la demo siempre está publicada (por si se ocultó al probar mainnet). Solo la de consola, sin dueño
+db.prepare("UPDATE stores SET status = 'published' WHERE id = ? AND owner IS NULL AND status = 'draft'").run(STORE_ID);
 
 const { count } = db
   .prepare("SELECT COUNT(*) AS count FROM products WHERE store_id = ?")

@@ -29,7 +29,10 @@ check("RPC de Fuji (43113) → falla: no es mainnet", fails({ ...healthy(), chai
 check("Tesorería distinta de la Safe → falla", fails({ ...healthy(), config: { ...healthy().config, treasury: "0x386De00589C783F454D237705b06F7C0d9D18f2c" } }).some((t) => /Tesorería/.test(t)));
 check("Token que no es USDC de 6 decimales → falla", fails({ ...healthy(), usdc: { symbol: "USDC.e", decimals: 6 } }).some((t) => /se esperaba USDC/.test(t)));
 check("Operador con 0.048 AVAX → falla y dice cuánto necesita", fails({ ...healthy(), operatorWei: parseEther("0.048") }).some((t) => /0\.0480 AVAX — necesita al menos 0\.2/.test(t)));
-check("Sin tiendas publicadas → falla", fails({ ...healthy(), stores: [] }).some((t) => /No hay tiendas publicadas/.test(t)));
+check("Sin tiendas reales → aviso (se puede ir a mainnet y aprobar la primera después)", warns({ ...healthy(), stores: [] }).some((t) => /Sin tiendas reales/.test(t)) && fails({ ...healthy(), stores: [] }).length === 0);
+const withDemo: MainnetFacts = { ...healthy(), stores: [{ ...healthy().stores[0], id: "cafe-kanjo", demo: true, verified: false, owner: null }] };
+check("La demo (Café Kanjō) no cuenta como tienda real: dice que se oculta en mainnet", levels(withDemo).some((l) => l.level === "ok" && /demo de Fuji/.test(l.text)) && warns(withDemo).some((t) => /Sin tiendas reales/.test(t)) && !warns(withDemo).some((t) => /SIN firmar/.test(t)));
+check("Wallet sin firmar y sin dueño → el aviso dice que no se puede firmar", warns({ ...healthy(), stores: [{ ...healthy().stores[0], verified: false, owner: null }], env: { ...healthy().env, MERCHANT_WA_ID: "tg-1" } }).some((t) => /sin dueño en el chat \(no se puede firmar\)/.test(t)));
 check("Una tienda con el vault rotado (getPayTo lanza) → falla con el motivo", fails({ ...healthy(), stores: [{ ...healthy().stores[0], payTo: { ok: false, error: "VaultRotated" } }] }).some((t) => /VaultRotated/.test(t)));
 check("PUBLIC_BASE_URL sin https → falla", fails({ ...healthy(), env: { ...healthy().env, PUBLIC_BASE_URL: "http://localhost:3000" } }).some((t) => /debe ser https/.test(t)));
 const soft: MainnetFacts = {

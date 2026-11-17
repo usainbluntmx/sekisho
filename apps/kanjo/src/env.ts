@@ -111,6 +111,8 @@ if (env.DISTRIBUTE_STALE_HOURS) {
 positiveNumber("DISTRIBUTE_FEE_CHANGE_HOURS");
 positiveNumber("DISTRIBUTE_CHECK_MINUTES");
 positiveNumber("HISTORY_HOURS");
+positiveNumber("CONVERSATION_RETENTION_DAYS");
+positiveNumber("ORDER_RETENTION_DAYS");
 
 if (problems.length > 0) {
   console.error(

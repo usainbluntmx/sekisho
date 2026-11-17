@@ -1,4 +1,5 @@
 import { getCustomerStore, getStore, isVisibleTo, setCustomerStore, upsertCustomer } from "./store.js";
+import { forgetCustomer } from "./retention.js";
 import { clearHistory } from "./memory.js";
 import { runAgent } from "./agent.js";
 import { handleMerchant } from "./onboarding.js";
@@ -52,12 +53,25 @@ export async function handleMessage(msg: ChatMessage, reply: Reply): Promise<voi
 
   const store = getCustomerStore(msg.from);
   if (!store) {
-    return reply(msg.from, "La tienda aún no está configurada.");
+    return reply(msg.from, "¡Hola! 🙂 Para empezar, abre el link de la tienda donde quieres comprar (te lo comparte el negocio).\n\n¿Tienes un negocio y quieres vender aquí? Escribe /vender.");
   }
 
   // "/start" sin tienda (abrir el bot directo): saludo con la tienda actual, sin gastar una llamada al agente
   if (msg.text.trim().toLowerCase() === "/start") {
     return reply(msg.from, `¡Hola! Estás con *${store.name}* 🙂 ¿En qué te ayudo?`);
+  }
+
+  // Privacidad: el cliente puede pedir que se borre su conversación y su nombre
+  const lowerText = msg.text.trim().toLowerCase();
+  if (lowerText === "/olvidarme") {
+    return reply(
+      msg.from,
+      "Puedo borrar tu conversación y tu nombre. Tus pedidos se conservan (son el registro de venta de la tienda), pero sin tu nombre.\n\nSi estás de acuerdo, escribe: */olvidarme confirmo*"
+    );
+  }
+  if (lowerText === "/olvidarme confirmo") {
+    forgetCustomer(msg.from);
+    return reply(msg.from, "Listo: borré tu conversación y tu nombre 🙂 Si vuelves a escribir, empezamos de cero.");
   }
 
   // Comando de soporte: reinicia la conversación

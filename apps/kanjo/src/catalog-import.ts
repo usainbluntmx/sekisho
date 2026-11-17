@@ -34,6 +34,7 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     applied_at TEXT
   );
+  CREATE INDEX IF NOT EXISTS idx_catalog_imports_store ON catalog_imports (store_id, status);
 `);
 
 interface ExistingProduct {

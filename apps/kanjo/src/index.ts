@@ -6,6 +6,8 @@ import { isValidSignature, parseIncomingMessages, sendText, type IncomingMessage
 import { handleMessage } from "./bot.js";
 import { registerCheckout } from "./checkout.js";
 import { registerWalletRoutes } from "./wallet-routes.js";
+import { applyRetention } from "./retention.js";
+import { oneLine } from "./errors.js";
 import {
   enqueue,
   getInboxText,
@@ -231,6 +233,24 @@ if (DEV_CHAT_TOKEN) {
 // Limpieza diaria del buzón (mensajes ya resueltos)
 pruneInbox();
 setInterval(() => pruneInbox(), 24 * 60 * 60 * 1000).unref();
+
+// Retención de datos: borra cada día lo que ya no sirve (conversaciones viejas, previews, pedidos cancelados…)
+function sweepOldData(): void {
+  try {
+    const r = applyRetention();
+    const total = r.conversations + r.catalogPreviews + r.cancelledOrders + r.notices + r.walletLinks;
+    if (total) {
+      console.log(
+        `[retención] Borrados: ${r.conversations} mensajes de conversación, ${r.catalogPreviews} vistas previas, ` +
+          `${r.cancelledOrders} pedidos cancelados, ${r.notices} avisos y ${r.walletLinks} links de wallet`
+      );
+    }
+  } catch (error) {
+    console.error("[retención] No se pudo limpiar:", oneLine(error));
+  }
+}
+sweepOldData();
+setInterval(sweepOldData, 24 * 60 * 60 * 1000).unref();
 
 // Limpieza diaria de borradores de tiendas abandonados (libera el cupo de altas)
 function sweepStaleDrafts(): void {

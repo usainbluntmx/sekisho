@@ -19,9 +19,9 @@ Customer's wallet signs EIP-3009 (no gas) ─▶ POST /api/pay (x402)
 ```
 
 - **Agent:** Claude through the Anthropic API, with three tools: `catalog_list`, `order_create` and `order_status`. Products, prices and stock come from the store database through those tools.
-- **Payment link:** each order gets a random 128-bit token. Without it, `/pay/<order>` returns the "order not found" page (404). The page uses the order's own store. `npm test` requests it over HTTP, CI runs all 13 test suites, and the [monitor](../../ops/README.md) checks in production that the route still answers.
+- **Payment link:** each order gets a random 128-bit token. Without it, `/pay/<order>` returns the "order not found" page (404). The page uses the order's own store. `npm test` requests it over HTTP, CI runs all 14 test suites, and the [monitor](../../ops/README.md) checks in production that the route still answers.
 - **Checkout:** a page that asks the customer's wallet for one EIP-3009 signature. The operator key submits it and pays the gas; the customer only needs USDC.
-- **Split:** USDC lands in the store's SplitVault. The [SDK distributor](../../sdk/README.md) splits in batches (≥ 5 USDC, or after 24 h once at least 0.25 USDC is pending), so gas stays below the fee.
+- **Split:** USDC lands in the store's SplitVault. The [SDK distributor](../../sdk/README.md) splits in batches (≥ 5 USDC, or after 24 h once at least 0.25 USDC is pending), so gas stays below the fee. Right after a payment only the vault that was paid is checked; the periodic check covers all of them.
 
 ## Stores
 
@@ -115,6 +115,7 @@ In the Docker image the same tools are `node dist/scripts/store-profile.js`, `st
 - **Sale by piece or by weight:** each product is sold by `pieza` or by `kg`. For `kg` products the price is per kilo and the customer asks in kilos with up to 3 decimals ("medio kilo" = 0.5, minimum 50 g, maximum 100 kg per line). Weight and stock are stored in whole grams, and each line is rounded to the cent, so the line amounts the agent says add up to exactly what is charged. The catalog import detects prices per kilo (`unit: kg`).
 - **Unpaid orders expire** after `ORDER_TTL_MINUTES` (60 by default). An expired payment link no longer charges, and the agent offers to place the order again. An order with a payment in progress is never expired, and if its payment settled on-chain anyway, the order is still marked paid: a charge is never lost. Stock is only taken when an order is paid, so expiring returns nothing.
 - **Voice with [ElevenLabs](https://elevenlabs.io):** speech-to-text for incoming voice notes and spoken replies (Ogg/Opus voice notes on WhatsApp, MP3 on the web). Spoken replies drop links, ids and formatting and read amounts out loud; a reply with a payment link always goes as text.
+- **Data retention and privacy:** once a day Kanjō deletes what is no longer needed: conversations older than `CONVERSATION_RETENTION_DAYS` (30; the agent only reads the last `HISTORY_HOURS`), catalog previews older than 7 days, cancelled orders that were never paid older than `ORDER_RETENTION_DAYS` (90), sent or failed notices older than 30 days, and used or expired wallet links older than 30 days. Paid orders, payments and splits are kept: they are the store's sales record. A customer can write `/olvidarme` (then `/olvidarme confirmo`) to delete their conversation and their name; their orders stay, without the name.
 - **Safety:**
   - no overselling: stock is checked before charging, and a paid order without stock is flagged, never lost;
   - no double charges: a settlement lock per order and one row per transaction;
@@ -209,7 +210,7 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store, weight/expiry and payment page (HTTP), template, Telegram, onboarding and mainnet-check checks. CI runs all of them |
+| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store, weight/expiry and payment page (HTTP), template, Telegram, onboarding, mainnet-check and retention/privacy checks. CI runs all of them |
 | `npm run store:create` | Preview and create a store (id, name, wallet, optional profile) |
 | `npm run store:template -- <type>` | Example profile and catalog to edit for a business type |
 | `npm run catalog:load -- <store> <file>` | Preview and load a catalog from a JSON file |
@@ -227,7 +228,7 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 
 ## Deploy
 
-The [`Dockerfile`](Dockerfile) builds a production image that runs as an unprivileged user, seeds the store on start and checks its own health on `/`. Mount a volume on `/app/data`: the SQLite database lives there. The live instance runs on Dokploy behind a Cloudflare tunnel at `kanjo.zerotwolabs.xyz`.
+The [`Dockerfile`](Dockerfile) builds a production image that runs as an unprivileged user, seeds the demo store on start and checks its own health on `/`. The demo store (Café Kanjō) lives only on Fuji: with `NETWORK=avalanche` the seed does not create it and hides it if it exists (going back to Fuji publishes it again), and customers who have not opened a store's link are asked to open one instead of landing on the demo. Mount a volume on `/app/data`: the SQLite database lives there. The live instance runs on Dokploy behind a Cloudflare tunnel at `kanjo.zerotwolabs.xyz`.
 
 ## Going to mainnet
 

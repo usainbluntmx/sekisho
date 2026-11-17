@@ -16,6 +16,7 @@ db.exec(`
     reason       TEXT NOT NULL,
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
   );
+  CREATE INDEX IF NOT EXISTS idx_distributions_store ON distributions (store_id, created_at);
 `);
 
 export interface DistributionResult {
@@ -63,10 +64,16 @@ function oldestUndistributedAt(storeId: string): Date | null {
   return row.oldest ? new Date(`${row.oldest.replace(" ", "T")}Z`) : null;
 }
 
+/**
+ * Si está puesto, la próxima revisión mira solo este vault (tras un pago). El SDK lee la lista
+ * de vendedores en cuanto empieza la revisión, así que basta con ponerlo justo antes de llamarla.
+ */
+let onlyMerchant: Address | null = null;
+
 /** Repartidor del SDK; la antigüedad de los pagos sale de la base, así que sobrevive reinicios. */
 const distributor = createSekishoDistributor({
   sekisho,
-  merchants: () => [...new Set(listVaultOwners().map((store) => getAddress(store.merchant_address)))],
+  merchants: () => merchantsToCheck(),
   policy: policyFromEnv(),
   log: (message) => console.log(message.replace("[sekisho]", "[distributor]")),
   onError: (error, merchant) =>
@@ -119,9 +126,21 @@ export function startDistributionScheduler(): void {
   );
 }
 
-/** Revisión inmediata tras un pago (modo por lotes): reparte ya si se alcanzó el umbral. */
+/**
+ * Revisión inmediata tras un pago (modo por lotes): mira SOLO el vault que cobró (SEKISHO-PERF-003)
+ * y reparte ya si alcanzó el umbral. Los demás vaults se quedan para la revisión periódica.
+ */
 export function checkAfterPayment(merchant: Address): void {
   if ((process.env.DISTRIBUTE_MODE ?? "batch") !== "batch") return;
-  distributor.notePayment(getAddress(merchant));
-  void runDistribution().catch((error) => console.error("[distributor] Error inesperado:", error));
+  const vaultOwner = getAddress(merchant);
+  distributor.notePayment(vaultOwner);
+  onlyMerchant = vaultOwner;
+  const run = distributor.check();
+  onlyMerchant = null;
+  void run.catch((error) => console.error("[distributor] Error inesperado:", error));
+}
+
+/** Para pruebas: qué vendedores revisaría la próxima revisión. */
+export function merchantsToCheck(): Address[] {
+  return onlyMerchant ? [onlyMerchant] : [...new Set(listVaultOwners().map((store) => getAddress(store.merchant_address)))];
 }

@@ -4,7 +4,7 @@
   "description": "AI sales agent for small businesses: chats with customers, builds orders and collects USDC through Sekisho",
   "main": "index.js",
   "scripts": {
-    "test": "npm run test:safety && npm run test:distribution && npm run test:security && npm run test:inbox && npm run test:catalog && npm run test:mcp && npm run test:profile && npm run test:stores && npm run test:orders && npm run test:templates && npm run test:telegram && npm run test:onboarding && npm run test:mainnet",
+    "test": "npm run test:safety && npm run test:distribution && npm run test:security && npm run test:inbox && npm run test:catalog && npm run test:mcp && npm run test:profile && npm run test:stores && npm run test:orders && npm run test:templates && npm run test:telegram && npm run test:onboarding && npm run test:mainnet && npm run test:retention",
     "dev": "npm run build:web && node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/index.ts",
     "chat": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/dev-chat.ts",
     "seed": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/seed.ts",
@@ -19,6 +19,7 @@
     "gas:report": "node --import tsx src/scripts/gas-report.ts",
     "test:distribution": "node --import tsx src/scripts/check-distribution-policy.ts",
     "mainnet:check": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env --import tsx src/scripts/mainnet-check.ts",
+    "test:retention": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-retention.ts",
     "test:mainnet": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-mainnet.ts",
     "distribute": "node --disable-warning=ExperimentalWarning --env-file=.env --import tsx src/scripts/distribute.ts",
     "test:security": "node --disable-warning=ExperimentalWarning --import tsx src/scripts/check-security.ts",

@@ -20,7 +20,16 @@ export interface MainnetFacts {
   operator: Address;
   operatorWei: bigint;
   /** Tiendas publicadas con su wallet, si está firmada y el payTo (o el error al pedirlo). */
-  stores: { id: string; name: string; merchant: string; verified: boolean; owner: string | null; payTo: { ok: true; vault: Address } | { ok: false; error: string } }[];
+  stores: {
+    id: string;
+    name: string;
+    merchant: string;
+    verified: boolean;
+    owner: string | null;
+    /** La tienda demo (Café Kanjō): se queda en Fuji y se oculta sola al arrancar en mainnet. */
+    demo?: boolean;
+    payTo: { ok: true; vault: Address } | { ok: false; error: string };
+  }[];
   env: Record<string, string | undefined>;
 }
 
@@ -58,16 +67,23 @@ export function evaluateMainnet(f: MainnetFacts): CheckLine[] {
     `${f.operator}: ${avax.toFixed(4)} AVAX${avax >= MIN_OPERATOR_AVAX ? "" : ` — necesita al menos ${MIN_OPERATOR_AVAX} AVAX en mainnet antes de cobrar`}`
   );
 
-  // Tiendas publicadas
-  if (f.stores.length === 0) add("fail", "Tiendas", "No hay tiendas publicadas");
-  for (const s of f.stores) {
+  // Tiendas publicadas (la demo no cuenta: se queda en Fuji)
+  for (const s of f.stores.filter((x) => x.demo)) {
+    add("ok", "Tiendas", `${s.name} (${s.id}) es la demo de Fuji: al arrancar en mainnet se oculta sola`);
+  }
+  const real = f.stores.filter((x) => !x.demo);
+  if (real.length === 0) add("warn", "Tiendas", "Sin tiendas reales publicadas: en mainnet nadie podrá comprar hasta que apruebes la primera alta por chat");
+  for (const s of real) {
     const wallet = isAddress(s.merchant, { strict: false });
     if (!wallet) {
       add("fail", "Tiendas", `${s.name} (${s.id}): wallet inválida`);
       continue;
     }
     if (!s.payTo.ok) add("fail", "Tiendas", `${s.name} (${s.id}): no se pudo obtener su vault — ${s.payTo.error}`);
-    else add(s.verified ? "ok" : "warn", "Tiendas", `${s.name} (${s.id}) → vault ${s.payTo.vault}${s.verified ? " · wallet firmada" : " · wallet SIN firmar (el dueño puede firmarla con /wallet)"}`);
+    else {
+      const signature = s.verified ? " · wallet firmada" : s.owner ? " · wallet SIN firmar (el dueño puede firmarla con /wallet)" : " · wallet SIN firmar y sin dueño en el chat (no se puede firmar)";
+      add(s.verified ? "ok" : "warn", "Tiendas", `${s.name} (${s.id}) → vault ${s.payTo.vault}${signature}`);
+    }
     if (!s.owner && !f.env.MERCHANT_WA_ID) add("warn", "Tiendas", `${s.name}: no tiene dueño ni MERCHANT_WA_ID, así que sus avisos de pedido pagado no le llegan a nadie`);
   }
 
