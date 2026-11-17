@@ -18,7 +18,7 @@ globalThis.fetch = (async () =>
 
 const { db } = await import("../db.js");
 const store = await import("../store.js");
-const { handleMerchant, slugFor, skipsChatLimit, expireStaleDrafts } = await import("../onboarding.js");
+const { handleMerchant, slugFor, skipsChatLimit, expireStaleDrafts, termsAccepted, TERMS_VERSION } = await import("../onboarding.js");
 const { parseCatalogLines } = await import("../catalog-lines.js");
 const { enqueueOrderPaid } = await import("../notify.js");
 const wl = await import("../wallet-link.js");
@@ -132,9 +132,11 @@ check("Después de /probar, sus mensajes van al agente", (await say(PEPE, "quier
 
 console.log("─── Revisión ───");
 await say(PEPE, "/vender");
-check("/enviar → en revisión", /Enviada/.test((await say(PEPE, "/enviar"))!) && pepeStore().status === "pending");
+const terms = (await say(PEPE, "/enviar"))!;
+check("/enviar primero muestra las responsabilidades (USDC, 1.5 %, conversión e impuestos, reembolsos)", /98\.5 %[\s\S]*1\.5 %[\s\S]*impuestos[\s\S]*reembolso[\s\S]*\/enviar acepto/.test(terms) && pepeStore().status === "draft");
+check("/enviar acepto → en revisión, con los términos registrados", /Enviada/.test((await say(PEPE, "/enviar acepto"))!) && pepeStore().status === "pending" && termsAccepted(pepeStore().id) === TERMS_VERSION);
 const review = outbox("store-review:");
-check("Al administrador le llega el resumen con wallet, productos y /aprobar", review?.recipient === ADMIN && review.body.includes(`${pepeWallet.address} (✅ firmada)`) && /Arrachera/.test(review.body) && review.body.includes(`/aprobar ${draft.id}`));
+check("Al administrador le llega el resumen con wallet, productos y /aprobar", review?.recipient === ADMIN && review.body.includes(`${pepeWallet.address} (✅ firmada)`) && review.body.includes(`Términos: ✅ aceptados (${TERMS_VERSION})`) && /Arrachera/.test(review.body) && review.body.includes(`/aprobar ${draft.id}`));
 check("Un cliente que escribe /aprobar no aprueba nada (va al agente)", (await say(CLIENTE, `/aprobar ${draft.id}`)) === null && pepeStore().status === "pending");
 check("/aprobar sin id → pide el id y dice cuáles están en revisión", /Falta el id[\s\S]*carniceria-don-pepe/.test((await say(ADMIN, "/aprobar"))!) && pepeStore().status === "pending");
 check("El administrador no cuenta para el límite de mensajes", skipsChatLimit(ADMIN, "/pendientes") && !skipsChatLimit(CLIENTE, "hola"));
@@ -146,7 +148,7 @@ await say(PEPE, "/vender");
 await say(PEPE, "/productos");
 await say(PEPE, "Arrachera, 380, kg, 10\nBistec de res, 220, kg, 15");
 check("/productos reemplaza el catálogo (1 nuevo, 1 actualizado, 1 quitado)", /1 nuevos, 1 actualizados, 1 quitados/.test((await say(PEPE, "si"))!));
-await say(PEPE, "/enviar");
+await say(PEPE, "/enviar acepto");
 check("/aprobar → publicada", /publicada/.test((await say(ADMIN, `/aprobar ${draft.id}`))!) && pepeStore().status === "published");
 check("El comerciante recibe su link de Telegram", (outbox("store-approved:")?.body ?? "").includes("https://t.me/kanjo_test_bot?start=carniceria-don-pepe") && outbox("store-approved:")?.recipient === PEPE);
 check("Publicada: aparece para clientes y agentes, y un cliente puede entrar", store.listPublishedStores().some((s) => s.id === draft.id) && store.setCustomerStore(CLIENTE, draft.id));

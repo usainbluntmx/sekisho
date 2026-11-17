@@ -63,7 +63,7 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npm run build
-      # Las 12 baterías (incluye la página de pago por HTTP en test:orders)
+      # Las 13 baterías (incluye la página de pago por HTTP en test:orders y la revisión previa a mainnet)
       - run: npm test
 
   demo-api:

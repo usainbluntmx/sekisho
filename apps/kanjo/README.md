@@ -2,7 +2,7 @@
 
 An AI sales agent for small businesses. It talks to customers, answers from the store's catalog, builds the order and sends a payment link. The customer pays in USDC and the money goes to the store's SplitVault through [Sekisho](../../README.md).
 
-> **Status:** runs on **Avalanche Fuji (testnet)**. Telegram is the first live chat channel; the WhatsApp channel is built and waiting for Meta's business verification; the web voice channel (`/voice`) is off in production. Mainnet needs a way to pay without a browser wallet (see [Limits](#limits)).
+> **Status:** runs on **Avalanche Fuji (testnet)**. Telegram is the first live chat channel; the WhatsApp channel is built and waiting for Meta's business verification; the web voice channel (`/voice`) is off in production. Kanjō is for people who already use crypto: customers pay with their own wallet and merchants receive USDC in theirs. Before switching to mainnet, run `mainnet:check` (see [Going to mainnet](#going-to-mainnet)).
 
 ## How it works
 
@@ -19,7 +19,7 @@ Customer's wallet signs EIP-3009 (no gas) ─▶ POST /api/pay (x402)
 ```
 
 - **Agent:** Claude through the Anthropic API, with three tools: `catalog_list`, `order_create` and `order_status`. Products, prices and stock come from the store database through those tools.
-- **Payment link:** each order gets a random 128-bit token. Without it, `/pay/<order>` returns the "order not found" page (404). The page uses the order's own store. `npm test` requests it over HTTP, CI runs all 12 test suites, and the [monitor](../../ops/README.md) checks in production that the route still answers.
+- **Payment link:** each order gets a random 128-bit token. Without it, `/pay/<order>` returns the "order not found" page (404). The page uses the order's own store. `npm test` requests it over HTTP, CI runs all 13 test suites, and the [monitor](../../ops/README.md) checks in production that the route still answers.
 - **Checkout:** a page that asks the customer's wallet for one EIP-3009 signature. The operator key submits it and pays the gas; the customer only needs USDC.
 - **Split:** USDC lands in the store's SplitVault. The [SDK distributor](../../sdk/README.md) splits in batches (≥ 5 USDC, or after 24 h once at least 0.25 USDC is pending), so gas stays below the fee.
 
@@ -146,7 +146,7 @@ With `MERCHANT_ONBOARDING=on`, a shop owner creates their store from the chat, w
 1. `/vender` (or the link `https://t.me/<bot>?start=vender`) asks, one at a time: the name, the business type, pickup or delivery, the address or delivery area, the hours, the prep time, and the wallet. For the wallet, the bot sends a single-use link (`/wallet/<token>`, valid for 30 minutes; `/wallet` sends a new one). The owner opens it in their wallet's browser and signs a message (EIP-191 `personal_sign`) that names the store, the owner and the link. Signing is not a transaction: it moves no funds and costs no gas. The address saved is the one that signed, so it is proven to be theirs, and an exchange deposit address, which cannot sign, is left out. Contract wallets such as a Safe are checked on-chain (ERC-1271).
 2. **Products** go in one message, one per line: `Nombre, precio en pesos, kg, existencias`. The preview shows each price in USDC and the price in pesos read back (so a mistyped "1,200" is obvious), and nothing is saved until the owner answers *sí*.
 3. The store is created as a **draft**. Customers and AI agents cannot see it, but its owner can: `/probar` lets them chat with it as a customer.
-4. `/enviar` sends it for review: the admin (`KANJO_ADMIN_ID`) gets a summary with the wallet and products, and answers `/aprobar <id>` or `/rechazar <id> <reason>`. The owner is told either way, and on approval gets the store's link.
+4. `/enviar` first shows what the merchant agrees to: customers pay in USDC on Avalanche straight to a vault in their name (Kanjō never holds their money), the contract sends them 98.5 % and 1.5 % is Sekisho's fee, converting USDC and taxes are up to them, and they handle deliveries, exchanges and refunds. `/enviar acepto` records the accepted version (`TERMS_VERSION`) and sends the store for review: the admin (`KANJO_ADMIN_ID`) gets a summary with the wallet, whether it is signed, the accepted terms and the products, and answers `/aprobar <id>` or `/rechazar <id> <reason>`. The owner is told either way, and on approval gets the store's link.
 
 From then on, `/vender` opens the owner's panel: `/productos` replaces the catalog, `/perfil` changes delivery, address and hours, and paid-order notices go to the owner instead of `MERCHANT_WA_ID`. Editing a store under review sends it back to draft. `/wallet` signs the current wallet (stores created before signatures show "not signed" in the panel) or changes it: the owner signs with the new wallet, Kanjō first splits whatever is pending in the old vault to the old wallet, and only then points the store to the new wallet and its own vault. If that split fails, or a payment is being settled at that moment, nothing changes. A payment signed for the old vault just before the change is refused when verified, so nothing is ever charged to the old vault, and the distributor keeps checking previous wallets for 30 days anyway. For a published store the change waits for the admin (`/aprobarwallet <id>` or `/rechazarwallet <id> <reason>`); drafts change at once. A published store cannot be deleted from the chat. `/cancelar` deletes a draft together with its unpaid test orders from `/probar`; a store with any paid order is never deleted. There is one store per owner, at most `ONBOARDING_MAX_DRAFTS` unpublished stores exist at once (default 50), and a draft with no activity for `ONBOARDING_DRAFT_DAYS` days (default 14) is deleted once a day, with a notice to its owner, so abandoned drafts never block new stores (stores under review, published, or with a paid order are never touched), and the web voice channel and AI agents cannot onboard. The admin can also use `/pendientes` (stores and wallet changes waiting) and `/ver <id>`.
 
@@ -209,7 +209,7 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store, weight/expiry and payment page (HTTP), template, Telegram and onboarding checks. CI runs all of them |
+| `npm test` | Payment safety, split policy, security, inbox, catalog/voice, MCP, business profile, multi-store, weight/expiry and payment page (HTTP), template, Telegram, onboarding and mainnet-check checks. CI runs all of them |
 | `npm run store:create` | Preview and create a store (id, name, wallet, optional profile) |
 | `npm run store:template -- <type>` | Example profile and catalog to edit for a business type |
 | `npm run catalog:load -- <store> <file>` | Preview and load a catalog from a JSON file |
@@ -220,6 +220,7 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 | `npm run pay:check` | Shows the payment quote (vault, amount, network) of the latest pending order |
 | `npm run test:webhook` | Simulates a signed WhatsApp webhook |
 | `npm run voice:check` | Checks the ElevenLabs configuration |
+| `npm run mainnet:check` | Read-only review before switching to mainnet (see below). Exits with code 1 if something blocks it |
 | `npm run distribute` | Runs the split policy once (`--force` splits whatever is pending) |
 | `npm run gas:report` | Live gas cost of settling and splitting |
 | `npm run catalog:import -- <url> [--store <id>]` / `catalog:apply -- <id>` | Catalog from a web page |
@@ -228,10 +229,25 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 
 The [`Dockerfile`](Dockerfile) builds a production image that runs as an unprivileged user, seeds the store on start and checks its own health on `/`. Mount a volume on `/app/data`: the SQLite database lives there. The live instance runs on Dokploy behind a Cloudflare tunnel at `kanjo.zerotwolabs.xyz`.
 
+## Going to mainnet
+
+Kanjō switches networks with `NETWORK=avalanche`. Before that, run the review with the production database and variables. It only reads: it signs and sends nothing.
+
+```bash
+cd /app && node dist/scripts/mainnet-check.js   # in the container
+npm run mainnet:check                           # locally
+```
+
+It checks that the RPC is Avalanche C-Chain (43114), that the factory's treasury is the 2-of-3 Safe and the payment token is USDC with 6 decimals, that the operator has at least 0.2 AVAX on mainnet to settle payments and run splits, that every published store has a valid wallet and a vault it can be paid at, and the key variables (`PUBLIC_BASE_URL` on https, `FX_MXN_PER_USDC`, `KANJO_ADMIN_ID`, your own `AVALANCHE_RPC_URL`). Warnings (an unsigned wallet, a store whose paid-order notices reach nobody, a scheduled fee change) do not block. While `NETWORK` is still `avalancheFuji` it uses the public mainnet RPCs.
+
 ## Limits
 
-- **Paying needs a browser wallet.** The checkout works with an injected wallet (for example MetaMask or Core on desktop, or the wallet's in-app browser on mobile). Paying from any phone without a wallet is the main item before mainnet.
+- **Paying needs a wallet.** Customers pay with an injected wallet (MetaMask or Core on desktop, or the wallet's in-app browser on mobile). From Telegram's own browser, the payment page offers to open MetaMask or to copy the link for Core's browser.
 - **Stores created from the console share one contact.** Their paid-order notices go to `MERCHANT_WA_ID`, with the store name in the message; stores created from the chat notify their owner.
 - **Merchants need their own wallet** and must sign with it once during onboarding, from the wallet's browser. Kanjō is built for people who already use crypto: converting USDC to local currency is up to each merchant.
 - **One replica.** The settlement lock and rate limits live in the process, so Kanjō runs as a single instance.
 - **Testnet only** for now: orders are paid with Fuji USDC.
+
+## Ideas for later
+
+- **Shopping budget without leaving the chat.** Today every purchase goes chat → wallet → chat. The idea is that a customer gives Kanjō a limited, revocable permission once (for example "up to 20 USDC a week, only to Sekisho stores", signed with EIP-2612, no gas), and after that pays from the chat with a "yes". Funds stay in the customer's wallet; a small contract would enforce the cap, the expiry and that money only goes to store vaults. Gas is already paid by Kanjō. To be designed after the current pending items.

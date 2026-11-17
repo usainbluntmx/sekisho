@@ -33,6 +33,7 @@ export function renderWalletPage({ token, storeName, change, message }: WalletPa
         <p>Esta página necesita una wallet. Ábrela en el navegador de tu wallet:</p>
         <a id="open-metamask" class="btn-link" href="#">Abrir en MetaMask</a>
         <button id="copy-link" class="btn-outline">Copiar el link</button>
+        <p class="muted" style="margin-top:12px">¿Usas Core? Copia el link y pégalo en su navegador (botón <b>Browser</b>).</p>
       </div>
       <div id="status"></div>
     </div>

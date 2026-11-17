@@ -178,6 +178,20 @@ export function skipsChatLimit(from: string, text?: string): boolean {
 
 // ─────────────── Textos ───────────────
 
+/** Lo que el comerciante acepta antes de mandar su tienda a revisión (cambia la versión si cambia el texto). */
+export const TERMS_VERSION = "2026-11";
+export const TERMS_TEXT = [
+  "Antes de mandarla a revisión, confirma que estás de acuerdo:",
+  "",
+  "• Tus clientes te pagan en *USDC en Avalanche*, directo a un contrato (vault) a tu nombre. Kanjō nunca guarda tu dinero.",
+  "• De cada venta, el contrato te reparte el *98.5 %* a tu wallet y el *1.5 %* es la comisión de Sekisho. Los repartos se hacen por lotes.",
+  "• Convertir tu USDC a pesos (o a tu moneda) y tus impuestos *te corresponden a ti*, con el exchange o servicio que prefieras.",
+  "• Tú atiendes a tus clientes: entregas, cambios y reembolsos (un reembolso lo mandas tú desde tu wallet).",
+  "• Cuida el acceso a tu wallet y a esta cuenta de chat: con ellos se administra tu tienda.",
+  "",
+  "Si estás de acuerdo, escribe: */enviar acepto*",
+].join("\n");
+
 const STATUS_LABEL: Record<Store["status"], string> = {
   draft: "📝 Borrador (solo tú la ves)",
   pending: "⏳ En revisión",
@@ -253,7 +267,7 @@ function catalogPreview(items: CatalogItem[], message = ""): string {
       `• ${i.name} — ${priceLabel(i.price_atomic, i.unit)}${mxn(i.price_atomic)}${i.stock !== undefined ? ` · hay ${formatQuantity(i.stock, i.unit)}` : ""}`
   );
   const hint = message.length >= NEAR_TELEGRAM_LIMIT ? `\n\n${SPLIT_HINT}` : "";
-  return `${items.length} productos (precios convertidos a USDC):\n${lines.join("\n")}${hint}\n\n¿Así está bien? Responde *sí* para guardarlos, o mándame la lista corregida.`;
+  return `${items.length} ${items.length === 1 ? "producto" : "productos"} (precios convertidos a USDC):\n${lines.join("\n")}${hint}\n\n¿Así está bien? Responde *sí* para guardarlos, o mándame la lista corregida.`;
 }
 
 async function panel(store: Store): Promise<string> {
@@ -287,6 +301,7 @@ function summaryForAdmin(store: Store): string {
     `Giro: ${BUSINESS_TYPES[p.businessType]}`,
     `Dueño: ${store.owner}`,
     `Wallet: ${store.merchant_address} ${walletVerifiedAt(store.id) ? "(✅ firmada)" : "(⚠️ sin firma)"}`,
+    `Términos: ${termsAccepted(store.id) ? `✅ aceptados (${termsAccepted(store.id)})` : "⚠️ sin aceptar"}`,
     `Dirección: ${p.address || "—"} · Zona: ${p.deliveryArea || "—"}`,
     `Horario: ${p.hours || "—"} · Tiempo: ${p.prepMinutes ? `${p.prepMinutes} min` : "—"}`,
     `Productos (${products.length}):`,
@@ -478,7 +493,8 @@ export async function handleMerchant(from: string, text: string): Promise<string
 
   // ── Comandos del panel (tienda ya creada)
   if (store && message.startsWith("/")) {
-    switch (lower) {
+    const accepted = lower === "/enviar acepto";
+    switch (accepted ? "/enviar" : lower) {
       case "/probar":
         setCustomerStore(from, store.id);
         clearHistory(from);
@@ -504,8 +520,10 @@ export async function handleMerchant(from: string, text: string): Promise<string
       case "/enviar": {
         if (store.status !== "draft") return [`Tu tienda está ${STATUS_LABEL[store.status].toLowerCase()}.`];
         if (listProducts(store.id).length === 0) return ["Tu tienda no tiene productos. Agrégalos con /productos."];
+        if (!accepted) return [TERMS_TEXT];
         const admin = adminId();
         if (!admin) return ["Ahora mismo no hay quién revise tiendas. Inténtalo más tarde 🙏"];
+        acceptTerms(store.id);
         setStoreStatus(store.id, "pending");
         enqueueNotification(`store-review:${store.id}:${Date.now()}`, admin, summaryForAdmin(getStore(store.id)!));
         end(from);
@@ -743,4 +761,22 @@ export async function onWalletVerified(link: WalletLink): Promise<{ ok: boolean;
   notifyWalletChanged(result.store, result.oldAddress, result.splitTx);
   if (note) enqueueNotification(`wallet-draft:${link.token}`, link.owner, note.trim());
   return { ok: true, message: "✅ Wallet cambiada. Regresa al chat." };
+}
+
+// ─────────────── Términos aceptados ───────────────
+
+{
+  const cols = db.prepare("PRAGMA table_info(stores)").all() as unknown as { name: string }[];
+  if (!cols.some((c) => c.name === "terms_version")) db.exec("ALTER TABLE stores ADD COLUMN terms_version TEXT");
+  if (!cols.some((c) => c.name === "terms_accepted_at")) db.exec("ALTER TABLE stores ADD COLUMN terms_accepted_at TEXT");
+}
+
+function acceptTerms(storeId: string): void {
+  db.prepare("UPDATE stores SET terms_version = ?, terms_accepted_at = datetime('now') WHERE id = ?").run(TERMS_VERSION, storeId);
+}
+
+/** Versión aceptada, o null si nunca los aceptó. */
+export function termsAccepted(storeId: string): string | null {
+  const row = db.prepare("SELECT terms_version AS v FROM stores WHERE id = ?").get(storeId) as { v: string | null } | undefined;
+  return row?.v ?? null;
 }

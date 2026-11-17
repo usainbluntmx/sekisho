@@ -4,6 +4,7 @@ import { db } from "./db.js";
 import { sekisho } from "./payments/usdc-sekisho.js";
 import { policyFromEnv } from "./distribution-policy.js";
 import { recentPreviousWallets } from "./wallet-link.js";
+import { oneLine } from "./errors.js";
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS distributions (
@@ -69,10 +70,7 @@ const distributor = createSekishoDistributor({
   policy: policyFromEnv(),
   log: (message) => console.log(message.replace("[sekisho]", "[distributor]")),
   onError: (error, merchant) =>
-    console.error(
-      `[distributor] ${merchant ?? "revisión"}: falló, se reintenta en la próxima revisión:`,
-      error instanceof Error ? error.message : error
-    ),
+    console.error(`[distributor] ${merchant ?? "revisión"}: falló, se reintenta en la próxima revisión: ${oneLine(error)}`),
   onDistributed: ({ merchant, tx, total, fee, reason }) => {
     // Un vault por vendedor: el reparto se anota en la primera tienda de ese vendedor
     const store = listVaultOwners().find((s) => getAddress(s.merchant_address) === merchant);
