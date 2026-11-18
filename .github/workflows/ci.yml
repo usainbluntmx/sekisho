@@ -188,5 +188,6 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
-      - run: npm audit --omit=dev --audit-level=high
+      # Igual que `npm audit --omit=dev --audit-level=high`, con excepciones que vencen (apps/web/audit-allowlist.json)
+      - run: node ../../scripts/audit-gate.mjs
       - run: npm run build

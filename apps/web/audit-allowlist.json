@@ -1,0 +1,8 @@
+[
+  {
+    "id": "GHSA-fc5q-39xc-vjpf",
+    "package": "picomatch",
+    "reason": "ReDoS en picomatch <=4.0.7 sin versión corregida publicada. El sitio es estático: picomatch solo corre en el build con nuestros propios patrones, nunca con entradas de visitantes. La única salida de npm es bajar Astro a 5.3.0 con --force.",
+    "expires": "2026-12-31"
+  }
+]

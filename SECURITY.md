@@ -37,10 +37,13 @@ Static analysis is not a substitute for a professional audit, which is recommend
 
 ## Known dependency advisories
 
-Production dependencies are audited in CI (`npm audit --omit=dev --audit-level=high`) for `sdk/`, `apps/kanjo/`, `apps/demo-api/` and `apps/web/`; all four report 0 vulnerabilities.
+Production dependencies are audited in CI (`npm audit --omit=dev --audit-level=high`) for `sdk/`, `apps/kanjo/`, `apps/demo-api/` and `ops/`, which report 0 vulnerabilities. `apps/web/` runs the same check through [`scripts/audit-gate.mjs`](scripts/audit-gate.mjs), which also accepts exceptions listed in `audit-allowlist.json`, each with its advisory, the reason and an expiry date: once it expires, CI fails again. Any other high or critical advisory still fails.
+
+Resolved: Hono advisories in `hono` ≤ 4.13.15 and `@hono/node-server` 2.0.0–2.1.5 (Nov 2026), fixed by moving to 4.13.16 and 2.1.8; Astro's own advisories ([GHSA-mh32-jxcr-mh9f](https://github.com/advisories/GHSA-mh32-jxcr-mh9f), [GHSA-r3h5-4585-7x3w](https://github.com/advisories/GHSA-r3h5-4585-7x3w)), fixed in Astro 7.4.12.
 
 Resolved: [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) (`zod` < 4.6.6, high) came through `@x402/*` 2.28.0. `@x402/*` 2.29.0 requires zod ≥ 4.6.6; the SDK moved to it in 0.5.2.
 
 | Advisory | Where | Exposure | Mitigation / status |
 | --- | --- | --- | --- |
+| [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) `picomatch` ≤ 4.0.7 ReDoS (high, no patched version yet) | `apps/web/` via Astro and Vite | Build time only: the site is static (`output: "static"`), so picomatch only matches our own patterns, never visitor input. | Allowed in `apps/web/audit-allowlist.json` until 2026-12-31. npm's only fix is `--force` downgrading Astro to 5.3.0, which we don't do. Update as soon as picomatch ships a fix. |
 | `elliptic` (critical, no patched version) and other advisories in the Hardhat 2 toolchain | `backend/` dev dependencies only (via `hardhat-deploy` / ethers v5 and `hardhat-network-helpers` v1) | Only the machine that compiles and deploys. Nothing is deployed from these packages. | The deployer key holds no role on the contracts (on mainnet, owner and treasury are the Safe). Migration to Hardhat 3 is planned after the mainnet launch; the deployed bytecode will be compared to prove the contracts don't change. |
