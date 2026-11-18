@@ -15,12 +15,12 @@
     "interop:server": "node --import tsx interop/server.ts"
   },
   "dependencies": {
-    "@hono/node-server": "^2.1.5",
+    "@hono/node-server": "^2.1.8",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@x402/evm": "^2.29.0",
     "@x402/hono": "^2.29.0",
     "@zero-two-labs/sekisho": "^0.5.2",
-    "hono": "^4.13.13",
+    "hono": "^4.13.16",
     "viem": "^2.57.7"
   },
   "devDependencies": {
