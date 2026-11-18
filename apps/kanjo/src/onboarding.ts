@@ -9,6 +9,7 @@ import { db } from "./db.js";
 import { clearHistory } from "./memory.js";
 import { enqueueNotification } from "./outbox.js";
 import {
+  closeStoreOrders,
   createStore,
   deleteUnpublishedStore,
   getStore,
@@ -19,6 +20,7 @@ import {
   setStoreProfile,
   setStoreStatus,
   RESERVED_IDS,
+  salesSummary,
   STORE_ID_RE,
   walletProblem,
   type Store,
@@ -29,6 +31,7 @@ import { linesFromTemplate, parseCatalogLines } from "./catalog-lines.js";
 import { applyCatalog, savePreview } from "./catalog-import.js";
 import { normalizeName, type CatalogItem } from "./catalog-normalize.js";
 import { formatQuantity, priceLabel } from "./units.js";
+import { formatUsdc } from "./money.js";
 import { storeLink, telegramUsername } from "./telegram.js";
 import {
   applyWalletChange,
@@ -36,6 +39,8 @@ import {
   markWalletLink,
   pendingWalletChange,
   setWalletVerified,
+  settlingFor,
+  vaultPendingAtomic,
   walletLinkUrl,
   walletVerifiedAt,
   WALLET_LINK_MINUTES,
@@ -285,7 +290,8 @@ async function panel(store: Store): Promise<string> {
     "/probar — habla con tu tienda como cliente",
     "/productos — cambiar tus productos",
     "/perfil — cambiar entrega, dirección y horario",
-    "/wallet — firmar tu wallet o cambiarla por otra"
+    "/wallet — firmar tu wallet o cambiarla por otra",
+    "/ventas — lo que llevas vendido"
   );
   if (store.status === "draft") lines.push("/enviar — mandarla a revisión para publicarla");
   if (store.status !== "published") lines.push("/cancelar — borrar el borrador");
@@ -364,13 +370,34 @@ function backToDraftIfPending(store: Store): string {
 
 async function handleAdmin(text: string): Promise<string[] | null> {
   const [command, id, ...rest] = text.trim().split(/\s+/);
-  const needsId = ["/ver", "/aprobar", "/rechazar", "/aprobarwallet", "/rechazarwallet"].includes(command.toLowerCase());
+  const needsId = ["/ver", "/aprobar", "/rechazar", "/aprobarwallet", "/rechazarwallet", "/baja"].includes(command.toLowerCase());
   if (needsId && !id) {
     const pending = listStoresByStatus("pending");
     const hint = pending.length ? `\nEn revisión: ${pending.map((s) => s.id).join(", ")}` : "\nNo hay tiendas en revisión.";
-    return [`Falta el id de la tienda: ${command.toLowerCase()} <id>${["/rechazar", "/rechazarwallet"].includes(command.toLowerCase()) ? " <motivo>" : ""}${hint}`];
+    return [`Falta el id de la tienda: ${command.toLowerCase()} <id>${["/rechazar", "/rechazarwallet", "/baja"].includes(command.toLowerCase()) ? " <motivo>" : ""}${hint}`];
   }
   switch (command.toLowerCase()) {
+    case "/tiendas": {
+      const published = listStoresByStatus("published");
+      return [published.length ? `Tiendas publicadas (${published.length}):\n${published.map((s) => `• ${s.name} — ${s.id}`).join("\n")}` : "No hay tiendas publicadas."];
+    }
+    case "/baja": {
+      const store = id ? getStore(id) : undefined;
+      if (!store || store.status !== "published") return ["Esa tienda no está publicada. Usa /tiendas para ver los ids."];
+      const reason = rest.join(" ").trim();
+      if (!reason) return [`Escribe el motivo: /baja ${store.id} <motivo>`];
+      if (settlingFor(store.id)) return ["Hay un pago en curso en esa tienda. Intenta de nuevo en un minuto."];
+      setStoreStatus(store.id, "draft");
+      const cancelled = closeStoreOrders(store.id);
+      if (store.owner) {
+        enqueueNotification(
+          `store-closed:${store.id}:${Date.now()}`,
+          store.owner,
+          `⏸️ Dimos de baja *${store.name}*: ${reason}\n\nTus clientes ya no la ven y sus pedidos sin pagar se cancelaron. Tus ventas no se pierden: lo pendiente de tu vault se te sigue repartiendo.\n\nCuando lo corrijas, escribe /vender y mándala otra vez a revisión con /enviar.`
+        );
+      }
+      return [`⏸️ ${store.name} dada de baja (vuelve a borrador). Pedidos sin pagar cancelados: ${cancelled}.${store.owner ? " Se le avisó al comerciante." : ""}`];
+    }
     case "/pendientes": {
       const pending = listStoresByStatus("pending");
       const wallets = listStoresByStatus("published").filter((s) => pendingWalletChange(s.id));
@@ -506,6 +533,8 @@ export async function handleMerchant(from: string, text: string): Promise<string
       case "/perfil":
         save(from, "fulfillment", { businessType: store.profile.businessType });
         return [prompt("fulfillment", {})];
+      case "/ventas":
+        return [await salesReport(store)];
       case "/wallet": {
         const link = createWalletLink(from, store.name, store.id);
         return [
@@ -779,4 +808,35 @@ function acceptTerms(storeId: string): void {
 export function termsAccepted(storeId: string): string | null {
   const row = db.prepare("SELECT terms_version AS v FROM stores WHERE id = ?").get(storeId) as { v: string | null } | undefined;
   return row?.v ?? null;
+}
+
+// ─────────────── /ventas ───────────────
+
+/** Resumen de ventas para el comerciante: ventanas móviles, más vendidos y lo que falta repartir del vault. */
+async function salesReport(store: Store): Promise<string> {
+  const sales = salesSummary(store.id);
+  const lines = [`📊 *Ventas de ${store.name}*`, ""];
+  for (const w of sales.windows) {
+    const avg = w.orders ? ` · ticket promedio ${formatUsdc(Math.round(w.totalAtomic / w.orders))} USDC` : "";
+    lines.push(`*${w.label}:* ${w.orders} ${w.orders === 1 ? "pedido" : "pedidos"} · ${formatUsdc(w.totalAtomic)} USDC${avg}`);
+  }
+  lines.push(`*Desde que abriste:* ${sales.allTime.orders} ${sales.allTime.orders === 1 ? "pedido" : "pedidos"} · ${formatUsdc(sales.allTime.totalAtomic)} USDC`);
+  if (sales.top.length) {
+    lines.push("", "*Lo más vendido (30 días):*");
+    for (const t of sales.top) lines.push(`• ${t.name} — ${formatQuantity(t.quantity, t.unit)} · ${formatUsdc(t.totalAtomic)} USDC`);
+  }
+  if (sales.unpaidOpen) lines.push("", `⏳ Pedidos esperando pago: ${sales.unpaidOpen}`);
+  if (sales.stockIssues30d) lines.push(`⚠️ Pedidos pagados con faltante de stock (30 días): ${sales.stockIssues30d}. Resuélvelos con tu cliente.`);
+  try {
+    const pending = await vaultPendingAtomic(store.merchant_address);
+    lines.push(
+      "",
+      pending > 0n
+        ? `💰 *Por repartir en tu vault:* ${formatUsdc(Number(pending))} USDC (el 98.5 % es tuyo; se reparte por lotes)`
+        : "💰 Tu vault no tiene nada pendiente: todo lo cobrado ya se repartió."
+    );
+  } catch {
+    lines.push("", "💰 Ahora no pude leer tu vault; inténtalo en un rato.");
+  }
+  return lines.join("\n");
 }

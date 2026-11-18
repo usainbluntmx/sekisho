@@ -139,6 +139,34 @@ export async function setupTelegramWebhook(publicBaseUrl: string, secret: string
   return { username: me.username, url };
 }
 
+/** Menú de comandos que muestra Telegram (botón «/» y menú). Clientes y comerciantes ven el general; el admin, además los suyos. */
+export const CUSTOMER_COMMANDS = [
+  { command: "start", description: "Empezar o volver al inicio" },
+  { command: "vender", description: "Abrir tu tienda o entrar a su panel" },
+  { command: "reiniciar", description: "Borrar la conversación y empezar de nuevo" },
+  { command: "olvidarme", description: "Borrar tu conversación y tu nombre" },
+];
+export const ADMIN_COMMANDS = [
+  ...CUSTOMER_COMMANDS,
+  { command: "pendientes", description: "Tiendas y cambios de wallet por revisar" },
+  { command: "tiendas", description: "Tiendas publicadas" },
+  { command: "ver", description: "Ver una tienda: /ver <id>" },
+  { command: "aprobar", description: "Publicar una tienda: /aprobar <id>" },
+  { command: "rechazar", description: "Regresar a borrador: /rechazar <id> <motivo>" },
+  { command: "aprobarwallet", description: "Aplicar un cambio de wallet: /aprobarwallet <id>" },
+  { command: "rechazarwallet", description: "Rechazar un cambio de wallet: /rechazarwallet <id> <motivo>" },
+  { command: "baja", description: "Dar de baja una tienda publicada: /baja <id> <motivo>" },
+];
+
+/** Registra el menú: el general para todos y, si hay admin de Telegram, el suyo solo en su chat. */
+export async function setupTelegramCommands(adminId?: string): Promise<{ admin: boolean }> {
+  await call("setMyCommands", { commands: CUSTOMER_COMMANDS, scope: { type: "default" } });
+  const adminChat = adminId?.startsWith("tg-") ? Number(adminId.slice(3)) : NaN;
+  if (!Number.isSafeInteger(adminChat)) return { admin: false };
+  await call("setMyCommands", { commands: ADMIN_COMMANDS, scope: { type: "chat", chat_id: adminChat } });
+  return { admin: true };
+}
+
 export async function telegramWebhookInfo(): Promise<{ url: string; pending_update_count: number; last_error_message?: string }> {
   return call("getWebhookInfo", {});
 }

@@ -75,6 +75,22 @@ console.log("─── Mensajes largos de salida ───");
   check("Un renglón larguísimo se corta a la fuerza", tg.splitForTelegram(oneHugeLine).every((p) => p.length <= 3500) && tg.splitForTelegram(oneHugeLine).join("") === oneHugeLine);
 }
 
+console.log("─── Menú de comandos ───");
+{
+  calls.length = 0;
+  const r = await tg.setupTelegramCommands("tg-1221618666");
+  const general = calls.find((c) => c.method === "setMyCommands" && c.body.scope?.type === "default");
+  const admin = calls.find((c) => c.method === "setMyCommands" && c.body.scope?.type === "chat");
+  check("Registra el menú general para todos", Boolean(general) && general!.body.commands.some((c: any) => c.command === "vender"));
+  check("…y el del admin solo en su chat (con /baja y /pendientes)", r.admin && admin?.body.scope.chat_id === 1221618666 && admin.body.commands.some((c: any) => c.command === "baja"));
+  const valid = (list: { command: string; description: string }[]) => list.every((c) => /^[a-z0-9_]{1,32}$/.test(c.command) && c.description.length >= 3 && c.description.length <= 256);
+  check("Los comandos cumplen el formato de Telegram (a-z, 0-9, _ y descripción de 3 a 256)", valid(tg.CUSTOMER_COMMANDS) && valid(tg.ADMIN_COMMANDS));
+  check("El menú general no muestra los comandos del admin", !tg.CUSTOMER_COMMANDS.some((c) => ["aprobar", "baja", "pendientes"].includes(c.command)));
+  calls.length = 0;
+  const noAdmin = await tg.setupTelegramCommands("5215550000");
+  check("Si el admin no es de Telegram, solo registra el general", !noAdmin.admin && calls.length === 1);
+}
+
 console.log("─── Formato ───");
 check("*Negritas* de WhatsApp → <b> de Telegram", tg.toTelegramHtml("*Total:* 5.21 USDC") === "<b>Total:</b> 5.21 USDC");
 check("HTML del texto se escapa (no se puede inyectar)", tg.toTelegramHtml("<b>hola</b> & más") === "&lt;b&gt;hola&lt;/b&gt; &amp; más");

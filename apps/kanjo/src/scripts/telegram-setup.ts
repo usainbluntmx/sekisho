@@ -1,10 +1,11 @@
 import { listPublishedStores } from "../store.js";
-import { setupTelegramWebhook, storeLink, telegramConfigured, telegramUsername, telegramWebhookInfo } from "../telegram.js";
+import { setupTelegramCommands, setupTelegramWebhook, storeLink, telegramConfigured, telegramUsername, telegramWebhookInfo } from "../telegram.js";
 
 // Canal de Telegram (usa TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET y PUBLIC_BASE_URL del entorno; nunca los imprime):
 //   npm run telegram:setup              → registra el webhook en Telegram y muestra el link de cada tienda
 //   npm run telegram:setup -- --info    → estado del webhook (pendientes y último error)
 //   npm run telegram:setup -- --links   → solo los links por tienda
+//   npm run telegram:setup -- --commands → solo el menú de comandos (general y el del admin)
 
 const args = process.argv.slice(2);
 if (!telegramConfigured()) {
@@ -24,6 +25,11 @@ try {
     console.log(info.last_error_message ? `⚠️ Último error: ${info.last_error_message}` : "✅ Sin errores");
     process.exit(0);
   }
+  if (args.includes("--commands")) {
+    const { admin } = await setupTelegramCommands(process.env.KANJO_ADMIN_ID);
+    console.log(`✅ Menú de comandos registrado${admin ? " (también el del admin)" : " (sin admin de Telegram: solo el general)"}`);
+    process.exit(0);
+  }
   if (args.includes("--links")) {
     printLinks(await telegramUsername());
     process.exit(0);
@@ -36,6 +42,8 @@ try {
 
   const { username, url } = await setupTelegramWebhook(base, secret);
   console.log(`✅ Webhook registrado: ${url}`);
+  const { admin } = await setupTelegramCommands(process.env.KANJO_ADMIN_ID);
+  console.log(`✅ Menú de comandos registrado${admin ? " (también el del admin)" : ""}`);
   printLinks(username);
 } catch (error) {
   console.error(`✘ ${(error as Error).message}`);

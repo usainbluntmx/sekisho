@@ -188,8 +188,13 @@ export function setWalletChain(next: WalletChain): void {
   chain = next;
 }
 
-/** Pedidos de la tienda con un cobro en este momento: durante un cobro no se cambia la wallet. */
-function settlingFor(storeId: string): boolean {
+/** Lo que el vault de ese vendedor tiene pendiente de repartir (USDC atómico). */
+export async function vaultPendingAtomic(merchant: string): Promise<bigint> {
+  return chain.pendingAtomic(getAddress(merchant));
+}
+
+/** Pedidos de la tienda con un cobro en este momento: durante un cobro no se cambia la wallet ni se da de baja. */
+export function settlingFor(storeId: string): boolean {
   const ids = db.prepare("SELECT id FROM orders WHERE store_id = ? AND status = 'pending_payment'").all(storeId) as { id: string }[];
   return ids.some((o) => isSettling(o.id));
 }

@@ -442,7 +442,7 @@ export function markOrderPaid(orderId: string, paymentTx: string): MarkPaidResul
     const result = db
       .prepare(
         `UPDATE orders SET status = 'paid', payment_tx = ?, paid_at = datetime('now'), cancel_reason = NULL
-         WHERE id = ? AND (status = 'pending_payment' OR (status = 'cancelled' AND cancel_reason = 'expired'))`
+         WHERE id = ? AND (status = 'pending_payment' OR (status = 'cancelled' AND cancel_reason IN ('expired', 'store_closed')))`
       )
       .run(paymentTx, orderId);
 
@@ -488,4 +488,70 @@ export function recordPayment(payment: PaymentRecord): boolean {
     )
     .run(payment.tx, payment.orderId, payment.payer ?? null, payment.amountAtomic, payment.kind);
   return Number(result.changes) > 0;
+}
+// ─────────────── Baja de una tienda y resumen de ventas ───────────────
+
+/**
+ * Cancela los pedidos sin pagar de una tienda que se da de baja: sus links dejan de cobrar.
+ * Si un pago ya firmado se liquida después, markOrderPaid lo honra igual (el dinero ya se movió).
+ */
+export function closeStoreOrders(storeId: string): number {
+  return Number(
+    db.prepare("UPDATE orders SET status = 'cancelled', cancel_reason = 'store_closed' WHERE store_id = ? AND status = 'pending_payment'").run(storeId).changes
+  );
+}
+
+export interface SalesWindow {
+  label: string;
+  orders: number;
+  totalAtomic: number;
+}
+
+export interface SalesSummary {
+  windows: SalesWindow[];
+  /** Más vendidos de los últimos 30 días, por importe. */
+  top: { name: string; quantity: number; unit: Unit; totalAtomic: number }[];
+  unpaidOpen: number;
+  stockIssues30d: number;
+  allTime: { orders: number; totalAtomic: number };
+}
+
+/** Ventas pagadas de una tienda (por fecha de pago), en ventanas móviles para no depender de zonas horarias. */
+export function salesSummary(storeId: string): SalesSummary {
+  const windowStmt = db.prepare(
+    "SELECT COUNT(*) AS n, COALESCE(SUM(total_atomic), 0) AS total FROM orders WHERE store_id = ? AND status = 'paid' AND paid_at > datetime('now', ?)"
+  );
+  const windows = (
+    [
+      ["Últimas 24 h", "-1 days"],
+      ["Últimos 7 días", "-7 days"],
+      ["Últimos 30 días", "-30 days"],
+    ] as const
+  ).map(([label, since]) => {
+    const r = windowStmt.get(storeId, since) as { n: number; total: number };
+    return { label, orders: Number(r.n), totalAtomic: Number(r.total) };
+  });
+
+  const lines = db
+    .prepare(
+      `SELECT i.name, i.unit, i.quantity, i.unit_price_atomic FROM order_items i
+       JOIN orders o ON o.id = i.order_id
+       WHERE o.store_id = ? AND o.status = 'paid' AND o.paid_at > datetime('now', '-30 days')`
+    )
+    .all(storeId) as { name: string; unit: Unit; quantity: number; unit_price_atomic: number }[];
+  const byName = new Map<string, { name: string; quantity: number; unit: Unit; totalAtomic: number }>();
+  for (const l of lines) {
+    const row = byName.get(l.name) ?? { name: l.name, quantity: 0, unit: l.unit, totalAtomic: 0 };
+    row.quantity += l.quantity;
+    row.totalAtomic += lineTotal(l);
+    byName.set(l.name, row);
+  }
+  const top = [...byName.values()].sort((a, b) => b.totalAtomic - a.totalAtomic).slice(0, 3);
+
+  const unpaidOpen = Number((db.prepare("SELECT COUNT(*) AS n FROM orders WHERE store_id = ? AND status = 'pending_payment'").get(storeId) as { n: number }).n);
+  const stockIssues30d = Number(
+    (db.prepare("SELECT COUNT(*) AS n FROM orders WHERE store_id = ? AND status = 'paid' AND stock_issue IS NOT NULL AND paid_at > datetime('now', '-30 days')").get(storeId) as { n: number }).n
+  );
+  const all = db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(total_atomic), 0) AS total FROM orders WHERE store_id = ? AND status = 'paid'").get(storeId) as { n: number; total: number };
+  return { windows, top, unpaidOpen, stockIssues30d, allTime: { orders: Number(all.n), totalAtomic: Number(all.total) } };
 }

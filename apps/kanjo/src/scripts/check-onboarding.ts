@@ -24,6 +24,9 @@ const { enqueueOrderPaid } = await import("../notify.js");
 const wl = await import("../wallet-link.js");
 const { registerWalletRoutes } = await import("../wallet-routes.js");
 const { tryStartSettlement, endSettlement } = await import("../settlement-guard.js");
+const { blockReason } = await import("../order-payment.js");
+const { formatUsdc } = await import("../money.js");
+const salesSummaryFor = (id: string) => store.salesSummary(id);
 const { Hono } = await import("hono");
 
 // Página de firma montada como en producción; las wallets de contrato se consultan a la red: aquí no
@@ -251,6 +254,58 @@ console.log("─── Cambio de wallet ───");
   const t5 = tokenIn(await say(OWNER, "/wallet"));
   const draftChange = await sign(owner, t5);
   check("Borrador: el cambio se aplica al firmar, sin revisión y sin reparto si no hay pendiente", draftChange.status === 200 && store.getStore("borrador-wallet")!.merchant_address === owner.address && splits.length === 1 && !outbox(`wallet-review:${t5}`));
+}
+
+console.log("─── /ventas ───");
+{
+  const pepeId = pepeStore().id;
+  const product = db.prepare("SELECT id, name FROM products WHERE store_id = ? AND active = 1 ORDER BY id LIMIT 1").get(pepeId) as { id: number; name: string };
+  db.prepare("UPDATE products SET stock = 1000000 WHERE id = ?").run(product.id);
+  store.upsertCustomer("5215550123", "Compradora");
+  const before = store.salesSummary(pepeId); // la tienda ya trae una venta de las pruebas anteriores
+  const pedidos = (n: number) => `${n} ${n === 1 ? "pedido" : "pedidos"}`;
+  const sell = (paidDaysAgo: number) => {
+    const o = store.createOrder(pepeId, "5215550123", [{ productId: product.id, quantity: 1 }]).order;
+    store.markOrderPaid(o.id, `0xventa${o.id}`);
+    db.prepare("UPDATE orders SET paid_at = datetime('now', ?) WHERE id = ?").run(`-${paidDaysAgo} days`, o.id);
+    return o;
+  };
+  const today = sell(0);
+  sell(3);
+  sell(20);
+  sell(60);
+  const open = store.createOrder(pepeId, "5215550123", [{ productId: product.id, quantity: 1 }]).order;
+  wl.setWalletChain({ pendingAtomic: async () => 1_230_000n, distribute: async () => "0x" });
+  await say(PEPE, "/vender");
+  const report = (await say(PEPE, "/ventas"))!;
+  const [d1, d7, d30] = before.windows;
+  const day = { n: d1.orders + 1, total: d1.totalAtomic + today.total_atomic };
+  check(
+    "/ventas: 24 h, 7 y 30 días con pedidos, total y ticket promedio",
+    report.includes(`*Últimas 24 h:* ${pedidos(day.n)} · ${formatUsdc(day.total)} USDC · ticket promedio ${formatUsdc(Math.round(day.total / day.n))} USDC`) &&
+      report.includes(`*Últimos 7 días:* ${pedidos(d7.orders + 2)}`) &&
+      report.includes(`*Últimos 30 días:* ${pedidos(d30.orders + 3)}`)
+  );
+  check("…lo vendido desde que abrió y lo más vendido del mes", report.includes(`*Desde que abriste:* ${pedidos(before.allTime.orders + 4)}`) && report.includes(`• ${product.name}`));
+  check("…pedidos esperando pago y lo pendiente del vault", /Pedidos esperando pago: 1/.test(report) && /Por repartir en tu vault:\* 1\.23 USDC/.test(report));
+  wl.setWalletChain({ pendingAtomic: async () => { throw new Error("RPC caída"); }, distribute: async () => "0x" });
+  check("Si el vault no se puede leer, /ventas responde igual y lo dice", /no pude leer tu vault/.test((await say(PEPE, "/ventas"))!));
+
+  console.log("─── /baja de una tienda publicada ───");
+  check("/tiendas lista las publicadas con su id", /Tiendas publicadas[\s\S]*carniceria-don-pepe/.test((await say(ADMIN, "/tiendas"))!));
+  check("/baja sin motivo → lo pide", /Escribe el motivo: \/baja carniceria-don-pepe/.test((await say(ADMIN, "/baja carniceria-don-pepe"))!));
+  check("Un cliente que escribe /baja no da de baja nada", (await say(CLIENTE, "/baja carniceria-don-pepe x")) === null && pepeStore().status === "published");
+  tryStartSettlement(open.id);
+  check("Con un cobro en curso → no se da de baja", /pago en curso/.test((await say(ADMIN, "/baja carniceria-don-pepe no surte"))!) && pepeStore().status === "published");
+  endSettlement(open.id);
+  const closed = (await say(ADMIN, "/baja carniceria-don-pepe no surte los pedidos"))!;
+  check("/baja → vuelve a borrador y cancela sus pedidos sin pagar", /dada de baja[\s\S]*cancelados: 1/.test(closed) && pepeStore().status === "draft" && store.getOrder(open.id)?.order.cancel_reason === "store_closed");
+  check("…ya no aparece para clientes ni agentes", !store.listPublishedStores().some((x) => x.id === pepeId));
+  check("…el link del pedido cancelado ya no cobra", blockReason(open.id, open.pay_token!)?.status === 409);
+  check("…y el comerciante recibe el motivo y cómo volver", /no surte los pedidos[\s\S]*\/enviar/.test(outbox(`store-closed:${pepeId}`)?.body ?? ""));
+  check("Un pago ya firmado que se liquida después se honra igual", store.markOrderPaid(open.id, "0xtarde").updated && store.getOrder(open.id)?.order.status === "paid");
+  check("Las ventas anteriores se conservan (y el pago tardío cuenta)", salesSummaryFor(pepeId).allTime.orders === before.allTime.orders + 5);
+  check("/baja de una tienda que no está publicada → aviso", /no está publicada/.test((await say(ADMIN, "/baja carniceria-don-pepe otra vez"))!));
 }
 
 console.log("─── Borradores abandonados ───");
