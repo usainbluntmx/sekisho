@@ -27,6 +27,7 @@ const { tryStartSettlement, endSettlement } = await import("../settlement-guard.
 const { blockReason } = await import("../order-payment.js");
 const { formatUsdc } = await import("../money.js");
 const salesSummaryFor = (id: string) => store.salesSummary(id);
+const refunds = await import("../refunds.js");
 const { Hono } = await import("hono");
 
 // Página de firma montada como en producción; las wallets de contrato se consultan a la red: aquí no
@@ -306,6 +307,64 @@ console.log("─── /ventas ───");
   check("Un pago ya firmado que se liquida después se honra igual", store.markOrderPaid(open.id, "0xtarde").updated && store.getOrder(open.id)?.order.status === "paid");
   check("Las ventas anteriores se conservan (y el pago tardío cuenta)", salesSummaryFor(pepeId).allTime.orders === before.allTime.orders + 5);
   check("/baja de una tienda que no está publicada → aviso", /no está publicada/.test((await say(ADMIN, "/baja carniceria-don-pepe otra vez"))!));
+  const bajaHint = (await say(ADMIN, "/baja"))!;
+  check("/baja sin id sugiere tiendas publicadas, no las que están en revisión", /Falta el id[\s\S]*(Publicadas:|No hay tiendas publicadas)/.test(bajaHint) && !/revisión/.test(bajaHint));
+
+  console.log("─── /reembolso ───");
+  const hash = (n: number) => `0x${n.toString(16).padStart(64, "0")}`;
+  const now = () => Math.floor(Date.now() / 1000) + 5;
+  const payer = privateKeyToAccount(generatePrivateKey()).address;
+  const current = pepeStore().merchant_address as `0x${string}`;
+  const previous = db.prepare("SELECT old_address AS a FROM wallet_history WHERE store_id = ? ORDER BY id LIMIT 1").get(pepeId) as { a: `0x${string}` };
+  const total = today.total_atomic;
+  const half = Math.floor(total / 2);
+  db.prepare("INSERT INTO payments (tx, order_id, payer, amount_atomic, kind) VALUES (?, ?, ?, ?, 'order')").run(`0xpago${today.id}`, today.id, payer, total);
+  const txs = new Map<string, import("../refunds.js").RefundTx | null>();
+  const transfer = (from: `0x${string}`, to: `0x${string}`, value: number) => ({ from, to, value: BigInt(value) });
+  txs.set(hash(1), null);
+  txs.set(hash(2), { success: false, timestamp: now(), transfers: [transfer(current, payer, total)] });
+  txs.set(hash(3), { success: true, timestamp: now(), transfers: [transfer(stranger.address, payer, total)] });
+  txs.set(hash(4), { success: true, timestamp: now(), transfers: [transfer(current, stranger.address, total)] });
+  txs.set(hash(5), { success: true, timestamp: now() - 86_400, transfers: [transfer(current, payer, total)] });
+  txs.set(hash(6), { success: true, timestamp: now(), transfers: [transfer(current, payer, half)] });
+  txs.set(hash(7), { success: true, timestamp: now(), transfers: [transfer(previous.a, payer, total - half)] });
+  txs.set(hash(8), { success: true, timestamp: now(), transfers: [transfer(current, payer, 1)] });
+  refunds.setRefundChain({ readTx: async (h) => txs.get(h) ?? null });
+  const refund = async (args: string) => (await say(PEPE, `/reembolso ${args}`.trim()))!;
+
+  check("/reembolso lista los pedidos pagados por reembolsar", new RegExp(`Reembolsos[\\s\\S]*${today.id} — ${formatUsdc(total)} USDC`).test(await refund("")));
+  check("…está en el panel", /\/reembolso — devolverle su dinero/.test((await say(PEPE, "/vender"))!));
+  const howTo = await refund(today.id.toLowerCase());
+  check("/reembolso <pedido> dice cuánto, a qué wallet y desde cuál", howTo.includes(payer) && howTo.includes(`*${formatUsdc(total)} USDC*`) && howTo.includes(`/reembolso ${today.id} <hash>`));
+  check("Un hash mal escrito → explica el formato", /debe empezar con 0x/.test(await refund(`${today.id} 0x123`)));
+  check("Una transacción que aún no aparece → pide esperar", /Todavía no encuentro/.test(await refund(`${today.id} ${hash(1)}`)));
+  check("Una transacción fallida → no cuenta", /falló en la red/.test(await refund(`${today.id} ${hash(2)}`)));
+  check("Desde una wallet que no es de la tienda → no cuenta", /desde la wallet de tu tienda/.test(await refund(`${today.id} ${hash(3)}`)));
+  check("Hacia una wallet que no pagó → no cuenta", /desde la wallet de tu tienda/.test(await refund(`${today.id} ${hash(4)}`)));
+  check("Una transacción anterior al pago → no cuenta", /anterior al pago/.test(await refund(`${today.id} ${hash(5)}`)));
+  check("Nada de lo rechazado quedó registrado", refunds.refundInfo(pepeId, today.id)!.refundedAtomic === 0);
+  refunds.setRefundChain({ readTx: async () => { throw new Error("RPC caída"); } });
+  check("Si la red no responde → lo dice y no registra", /no pude leer la red/.test(await refund(`${today.id} ${hash(6)}`)) && refunds.refundInfo(pepeId, today.id)!.refundedAtomic === 0);
+  refunds.setRefundChain({ readTx: async (h) => txs.get(h) ?? null });
+
+  const partial = await refund(`${today.id} ${hash(6)}`);
+  check("Reembolso parcial desde la wallet actual → se registra", /Reembolso registrado/.test(partial) && /Ya le avisé/.test(partial) && refunds.refundInfo(pepeId, today.id)!.refundedAtomic === half);
+  check("…y el cliente recibe el aviso con el comprobante", /Reembolso parcial[\s\S]*\/tx\/0x0+6/.test(outbox(`refund:${hash(6)}`)?.body ?? "") && outbox(`refund:${hash(6)}`)?.recipient === "5215550123");
+  check("La misma transacción no se registra dos veces", /ya está registrada/.test(await refund(`${today.id} ${hash(6)}`)));
+  check("El resto desde la wallet anterior de la tienda → completo", /por completo/.test(await refund(`${today.id} ${hash(7)}`)) && refunds.refundInfo(pepeId, today.id)!.remainingAtomic === 0);
+  check("…aviso de reembolso completo", /↩️ \*Reembolso\* · pedido/.test(outbox(`refund:${hash(7)}`)?.body ?? ""));
+  check("Un pedido ya reembolsado no acepta más", /reembolsado por completo/.test(await refund(`${today.id} ${hash(8)}`)));
+  check("…y ya no aparece en la lista", !(await refund("")).includes(`${today.id} —`));
+  check("/ventas muestra lo reembolsado", new RegExp(`Reembolsado: ${formatUsdc(total).replace(".", "\\.")} USDC en 30 días`).test((await say(PEPE, "/ventas"))!));
+  check("Un pedido que no es de la tienda → no lo encuentra", /No encuentro ese pedido/.test(await refund(`NOEXISTE ${hash(9)}`)));
+  check("Un cliente que escribe /reembolso no registra nada", (await say(CLIENTE, `/reembolso ${today.id} ${hash(8)}`)) === null);
+
+  store.upsertCustomer("web-abc", "Web");
+  const webOrder = store.createOrder(pepeId, "web-abc", [{ productId: product.id, quantity: 1 }]).order;
+  store.markOrderPaid(webOrder.id, `0xweb${webOrder.id}`);
+  db.prepare("INSERT INTO payments (tx, order_id, payer, amount_atomic, kind) VALUES (?, ?, ?, ?, 'order')").run(`0xpago${webOrder.id}`, webOrder.id, payer, webOrder.total_atomic);
+  txs.set(hash(10), { success: true, timestamp: now(), transfers: [transfer(current, payer, webOrder.total_atomic)] });
+  check("Cliente del canal web → se registra y dice que no hay chat para avisarle", /no tengo un chat para avisarle/.test(await refund(`${webOrder.id} ${hash(10)}`)) && !outbox(`refund:${hash(10)}`));
 }
 
 console.log("─── Borradores abandonados ───");

@@ -33,6 +33,8 @@ import { normalizeName, type CatalogItem } from "./catalog-normalize.js";
 import { formatQuantity, priceLabel } from "./units.js";
 import { formatUsdc } from "./money.js";
 import { storeLink, telegramUsername } from "./telegram.js";
+import { recordRefund, refundableOrders, refundInfo } from "./refunds.js";
+import { NETWORK_CONFIG } from "./network.js";
 import {
   applyWalletChange,
   createWalletLink,
@@ -291,7 +293,8 @@ async function panel(store: Store): Promise<string> {
     "/productos — cambiar tus productos",
     "/perfil — cambiar entrega, dirección y horario",
     "/wallet — firmar tu wallet o cambiarla por otra",
-    "/ventas — lo que llevas vendido"
+    "/ventas — lo que llevas vendido",
+    "/reembolso — devolverle su dinero a un cliente"
   );
   if (store.status === "draft") lines.push("/enviar — mandarla a revisión para publicarla");
   if (store.status !== "published") lines.push("/cancelar — borrar el borrador");
@@ -372,8 +375,11 @@ async function handleAdmin(text: string): Promise<string[] | null> {
   const [command, id, ...rest] = text.trim().split(/\s+/);
   const needsId = ["/ver", "/aprobar", "/rechazar", "/aprobarwallet", "/rechazarwallet", "/baja"].includes(command.toLowerCase());
   if (needsId && !id) {
-    const pending = listStoresByStatus("pending");
-    const hint = pending.length ? `\nEn revisión: ${pending.map((s) => s.id).join(", ")}` : "\nNo hay tiendas en revisión.";
+    const isBaja = command.toLowerCase() === "/baja";
+    const candidates = listStoresByStatus(isBaja ? "published" : "pending");
+    const hint = candidates.length
+      ? `\n${isBaja ? "Publicadas" : "En revisión"}: ${candidates.map((s) => s.id).join(", ")}`
+      : isBaja ? "\nNo hay tiendas publicadas." : "\nNo hay tiendas en revisión.";
     return [`Falta el id de la tienda: ${command.toLowerCase()} <id>${["/rechazar", "/rechazarwallet", "/baja"].includes(command.toLowerCase()) ? " <motivo>" : ""}${hint}`];
   }
   switch (command.toLowerCase()) {
@@ -520,6 +526,7 @@ export async function handleMerchant(from: string, text: string): Promise<string
 
   // ── Comandos del panel (tienda ya creada)
   if (store && message.startsWith("/")) {
+    if (lower === "/reembolso" || lower.startsWith("/reembolso ")) return [await refundCommand(store, message)];
     const accepted = lower === "/enviar acepto";
     switch (accepted ? "/enviar" : lower) {
       case "/probar":
@@ -825,6 +832,12 @@ async function salesReport(store: Store): Promise<string> {
     lines.push("", "*Lo más vendido (30 días):*");
     for (const t of sales.top) lines.push(`• ${t.name} — ${formatQuantity(t.quantity, t.unit)} · ${formatUsdc(t.totalAtomic)} USDC`);
   }
+  if (sales.refundsAllTime.count) {
+    lines.push(
+      "",
+      `↩️ Reembolsado: ${formatUsdc(sales.refunds30d.totalAtomic)} USDC en 30 días · ${formatUsdc(sales.refundsAllTime.totalAtomic)} USDC desde que abriste`
+    );
+  }
   if (sales.unpaidOpen) lines.push("", `⏳ Pedidos esperando pago: ${sales.unpaidOpen}`);
   if (sales.stockIssues30d) lines.push(`⚠️ Pedidos pagados con faltante de stock (30 días): ${sales.stockIssues30d}. Resuélvelos con tu cliente.`);
   try {
@@ -839,4 +852,52 @@ async function salesReport(store: Store): Promise<string> {
     lines.push("", "💰 Ahora no pude leer tu vault; inténtalo en un rato.");
   }
   return lines.join("\n");
+}
+
+// ─────────────── /reembolso ───────────────
+
+const EXPLORER = NETWORK_CONFIG.explorer;
+
+/**
+ * Reembolsos sin custodia: el comercio envía USDC desde su wallet a la que pagó y Kanjō lo verifica.
+ *   /reembolso                  → pedidos a los que les falta por reembolsar
+ *   /reembolso <pedido>         → cuánto, a qué wallet y cómo
+ *   /reembolso <pedido> <tx>    → verifica la transacción, la registra y avisa al cliente
+ */
+async function refundCommand(store: Store, message: string): Promise<string> {
+  const [, orderId, tx] = message.trim().split(/\s+/);
+  if (!orderId) {
+    const open = refundableOrders(store.id);
+    const list = open.length
+      ? `Pedidos pagados (30 días):\n${open.map((r) => `• ${r.orderId} — ${formatUsdc(r.remainingAtomic)} USDC${r.refundedAtomic ? " por reembolsar" : ""}`).join("\n")}`
+      : "No tienes pedidos pagados en los últimos 30 días por reembolsar.";
+    return `↩️ *Reembolsos*\n\nEl dinero lo devuelves tú desde tu wallet; yo lo verifico en la red y le aviso a tu cliente.\n\n${list}\n\nEscribe /reembolso <pedido> para ver a qué wallet enviarlo.`;
+  }
+  if (!tx) {
+    const info = refundInfo(store.id, orderId);
+    if (!info) return "No encuentro ese pedido pagado en tu tienda. Usa /reembolso para ver tus pedidos.";
+    if (info.remainingAtomic === 0) return `El pedido ${info.orderId} ya está reembolsado por completo.`;
+    if (info.payers.length === 0) return `No tengo la wallet que pagó el pedido ${info.orderId}, así que no puedo verificar un reembolso. Escríbenos.`;
+    return [
+      `↩️ *Reembolso del pedido ${info.orderId}*`,
+      "",
+      `Cobrado: ${formatUsdc(info.paidAtomic)} USDC${info.refundedAtomic ? ` · ya reembolsado: ${formatUsdc(info.refundedAtomic)} USDC` : ""}`,
+      `Puedes devolver hasta: *${formatUsdc(info.remainingAtomic)} USDC* (todo o una parte)`,
+      "",
+      `1. Desde tu wallet *${shortAddress(store.merchant_address)}*, envía USDC en Avalanche a la wallet con la que pagó tu cliente:`,
+      info.payers.join("\n"),
+      "2. Copia el hash de la transacción (empieza con 0x).",
+      `3. Escribe: /reembolso ${info.orderId} <hash>`,
+      "",
+      "Verifico la transacción en la red y le aviso a tu cliente. No sirve enviarlo desde un exchange: debe salir de la wallet de tu tienda.",
+    ].join("\n");
+  }
+  const result = await recordRefund(store.id, orderId, tx);
+  if (!result.ok) return result.error;
+  return (
+    `✅ Reembolso registrado: ${formatUsdc(result.amountAtomic)} USDC del pedido ${result.orderId}` +
+    (result.complete ? " (reembolsado por completo)." : `. Llevas ${formatUsdc(result.refundedAtomic)} USDC reembolsados.`) +
+    (result.customerNotified ? "\nYa le avisé a tu cliente." : "\nTu cliente compró por la web o con un agente de IA, así que no tengo un chat para avisarle.") +
+    `\n\nComprobante: ${EXPLORER}/tx/${tx.toLowerCase()}`
+  );
 }

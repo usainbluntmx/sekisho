@@ -46,7 +46,7 @@ export function devChatSender(requested: string | undefined): string {
 }
 
 /** Clientes sin un canal directo de mensajes: a ellos no se les envían avisos. */
-function hasNoDirectChannel(waId: string): boolean {
+export function hasNoDirectChannel(waId: string): boolean {
   return isWebCustomer(waId) || isAgentCustomer(waId) || isDevCustomer(waId);
 }
 
@@ -156,4 +156,16 @@ export function recoverPaidNotifications(hours = 24): number {
   let recovered = 0;
   for (const row of rows) recovered += enqueueOrderPaid(row.id);
   return recovered;
+}
+/** Avisa al cliente de un reembolso verificado. Devuelve false si el cliente no tiene un chat donde avisarle. */
+export function enqueueRefund(orderId: string, tx: string, amountAtomic: number, complete: boolean): boolean {
+  const found = getOrder(orderId);
+  if (!found || hasNoDirectChannel(found.order.customer_wa_id)) return false;
+  const store = getStore(found.order.store_id);
+  enqueueNotification(
+    `refund:${tx}:customer`,
+    found.order.customer_wa_id,
+    `↩️ *${complete ? "Reembolso" : "Reembolso parcial"}* · pedido *${orderId}*\n\n${store?.name ?? "La tienda"} te devolvió ${formatUsdc(amountAtomic)} USDC a la wallet con la que pagaste.\n\nComprobante: ${EXPLORER}/tx/${tx}`
+  );
+  return true;
 }

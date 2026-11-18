@@ -514,6 +514,9 @@ export interface SalesSummary {
   unpaidOpen: number;
   stockIssues30d: number;
   allTime: { orders: number; totalAtomic: number };
+  /** Reembolsos verificados (por fecha de registro). */
+  refunds30d: { count: number; totalAtomic: number };
+  refundsAllTime: { count: number; totalAtomic: number };
 }
 
 /** Ventas pagadas de una tienda (por fecha de pago), en ventanas móviles para no depender de zonas horarias. */
@@ -553,5 +556,16 @@ export function salesSummary(storeId: string): SalesSummary {
     (db.prepare("SELECT COUNT(*) AS n FROM orders WHERE store_id = ? AND status = 'paid' AND stock_issue IS NOT NULL AND paid_at > datetime('now', '-30 days')").get(storeId) as { n: number }).n
   );
   const all = db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(total_atomic), 0) AS total FROM orders WHERE store_id = ? AND status = 'paid'").get(storeId) as { n: number; total: number };
-  return { windows, top, unpaidOpen, stockIssues30d, allTime: { orders: Number(all.n), totalAtomic: Number(all.total) } };
+  const refundStmt = db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(amount_atomic), 0) AS total FROM refunds WHERE store_id = ? AND created_at > datetime('now', ?)");
+  const r30 = refundStmt.get(storeId, "-30 days") as { n: number; total: number };
+  const rAll = refundStmt.get(storeId, "-100 years") as { n: number; total: number };
+  return {
+    windows,
+    top,
+    unpaidOpen,
+    stockIssues30d,
+    allTime: { orders: Number(all.n), totalAtomic: Number(all.total) },
+    refunds30d: { count: Number(r30.n), totalAtomic: Number(r30.total) },
+    refundsAllTime: { count: Number(rAll.n), totalAtomic: Number(rAll.total) },
+  };
 }

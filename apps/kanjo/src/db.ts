@@ -127,6 +127,22 @@ if (!hasColumn("orders", "pay_token")) {
   db.exec("ALTER TABLE orders ADD COLUMN pay_token TEXT");
 }
 
+// Reembolsos que el comercio hizo desde su propia wallet, verificados en la cadena (una fila por transacción).
+// Kanjō nunca mueve el dinero: solo comprueba la transferencia de USDC hacia quien pagó y le avisa al cliente.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS refunds (
+    tx            TEXT PRIMARY KEY,
+    order_id      TEXT NOT NULL REFERENCES orders(id),
+    store_id      TEXT NOT NULL,
+    amount_atomic INTEGER NOT NULL CHECK (amount_atomic > 0),
+    from_address  TEXT NOT NULL,
+    to_address    TEXT NOT NULL,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_refunds_order ON refunds (order_id);
+  CREATE INDEX IF NOT EXISTS idx_refunds_store ON refunds (store_id, created_at);
+`);
+
 // Índices (SEKISHO-PERF-002): los barridos de cada minuto y las búsquedas por tienda o cliente
 // dejan de recorrer las tablas completas. Van después de las migraciones (usan columnas nuevas).
 db.exec(`

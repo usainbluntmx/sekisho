@@ -18,6 +18,7 @@ import type { x402Facilitator } from "@x402/core/facilitator";
 import { toFacilitatorClient } from "@zero-two-labs/sekisho";
 import { z } from "zod";
 import { formatUsdc } from "./money.js";
+import { refundInfo } from "./refunds.js";
 import { clientIp } from "./security.js";
 import { endSettlement } from "./settlement-guard.js";
 import { countPendingOrders, createOrder, getOrder, getStore as getAnyStore, isExpired, lineTotal, listProducts, listPublishedStores, upsertCustomer, type OrderItem } from "./store.js";
@@ -252,7 +253,7 @@ export async function createKanjoMcp(options: McpOptions) {
 
     server.tool(
       "order_status",
-      "Free. Status of an order (pending_payment, paid, expired or cancelled). expired = not paid in time; place a new order.",
+      "Free. Status of an order (pending_payment, paid, expired or cancelled). expired = not paid in time; place a new order. refunded_usdc appears when the store refunded part or all of a paid order to the paying wallet.",
       { order_id: z.string().min(1).max(32), token: z.string().min(1).max(64) },
       async ({ order_id, token }) => {
         const orderId = order_id.trim().toUpperCase();
@@ -265,6 +266,7 @@ export async function createKanjoMcp(options: McpOptions) {
           items: found.items.map(lineForAgent),
           total_usdc: formatUsdc(found.order.total_atomic),
           payment_tx: found.order.payment_tx ?? undefined,
+          refunded_usdc: refundedUsdc(found.order.store_id, orderId),
         });
       }
     );
@@ -299,4 +301,10 @@ export async function registerMcp(app: Hono, options: McpOptions, limit: Paramet
   const mcp = await createKanjoMcp(options);
   app.use(MCP_PATH, limit);
   app.all(MCP_PATH, (c) => mcp.handle(c.req.raw, clientIp(c)));
+}
+
+/** USDC que la tienda ya reembolsó de un pedido pagado, o undefined si no hay reembolsos. */
+function refundedUsdc(storeId: string, orderId: string): string | undefined {
+  const info = refundInfo(storeId, orderId);
+  return info && info.refundedAtomic > 0 ? formatUsdc(info.refundedAtomic) : undefined;
 }
