@@ -3,6 +3,7 @@ import { forgetCustomer } from "./retention.js";
 import { clearHistory } from "./memory.js";
 import { runAgent } from "./agent.js";
 import { handleMerchant } from "./onboarding.js";
+import { recordFeedback } from "./feedback.js";
 
 
 /** Lo que se le pasa al agente de un solo mensaje (protege el gasto); el alta recibe el texto completo. */
@@ -32,6 +33,10 @@ export async function handleMessage(msg: ChatMessage, reply: Reply): Promise<voi
   }
 
   upsertCustomer(msg.from, msg.name);
+
+  // Comentarios (/feedback <texto>): funcionan en cualquier momento, también a mitad del alta de una tienda
+  const feedback = msg.text.trim().match(/^\/feedback(?:@\w+)?(?:\s+([\s\S]*))?$/i);
+  if (feedback) return reply(msg.from, recordFeedback(msg.from, feedback[1] ?? ""));
 
   // Alta de comerciantes y comandos del administrador (MERCHANT_ONBOARDING=on): no pasan por el agente
   const merchantReplies = await handleMerchant(msg.from, msg.text);

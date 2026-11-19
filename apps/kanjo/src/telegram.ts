@@ -145,6 +145,7 @@ export const CUSTOMER_COMMANDS = [
   { command: "vender", description: "Abrir tu tienda o entrar a su panel" },
   { command: "reiniciar", description: "Borrar la conversación y empezar de nuevo" },
   { command: "olvidarme", description: "Borrar tu conversación y tu nombre" },
+  { command: "feedback", description: "Mandarnos un comentario o una idea" },
 ];
 export const ADMIN_COMMANDS = [
   ...CUSTOMER_COMMANDS,

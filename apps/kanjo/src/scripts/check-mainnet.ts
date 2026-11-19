@@ -53,5 +53,16 @@ const viemLike = Object.assign(new Error("The request took too long to respond.\
 check("Un error de viem se resume en una línea con su causa", oneLine(viemLike) === "The request took too long to respond. (The request timed out.)");
 check("Un error común queda en su primera línea", oneLine(new Error("falló\nstack")) === "falló");
 
+console.log("─── Guarda de red de la RPC ───");
+{
+  const { checkRpcChain, chainName } = await import("../rpc-guard.js");
+  check("La RPC de la red esperada → ok", (await checkRpcChain(async () => 43113, 43113)).status === "ok");
+  const wrong = await checkRpcChain(async () => 43114, 43113);
+  check("Una RPC de mainnet con NETWORK=avalancheFuji → mismatch", wrong.status === "mismatch" && wrong.actual === 43114 && chainName(43114) === "Avalanche C-Chain (mainnet)");
+  check("Una RPC caída → unreachable (no tumba el servicio)", (await checkRpcChain(async () => { throw new Error("ECONNREFUSED"); }, 43114)).status === "unreachable");
+  const slow = await checkRpcChain(() => new Promise<number>(() => {}), 43114, 50);
+  check("Una RPC que no responde → unreachable por tiempo", slow.status === "unreachable" && /sin respuesta/.test(slow.error));
+}
+
 console.log(failures ? `\n❌ ${failures} prueba(s) fallaron` : "\n✅ Todas las pruebas pasaron");
 process.exit(failures ? 1 : 0);

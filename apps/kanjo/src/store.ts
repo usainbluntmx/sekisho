@@ -3,6 +3,7 @@ import { getAddress, isAddress, zeroAddress } from "viem";
 import { parseStoredProfile, validateProfile, type StoreProfile } from "./store-profile.js";
 import { db } from "./db.js";
 import { lineTotalAtomic, toBase, type Unit } from "./units.js";
+import { formatUsdc } from "./money.js";
 
 export interface Store {
   id: string;
@@ -301,6 +302,18 @@ export function getOrder(orderId: string): { order: Order; items: OrderItem[] } 
   return { order, items };
 }
 
+/**
+ * Ticket mínimo por pedido en unidades atómicas de USDC (MIN_ORDER_USDC).
+ * Debajo de ~0.38 USDC el fee de 1.5% no cubre el gas de liquidar y repartir, así que en mainnet
+ * el mínimo por defecto es 0.50 USDC. En Fuji (la demo) no hay mínimo. 0 lo apaga.
+ */
+export function minOrderAtomic(): number {
+  const raw = process.env.MIN_ORDER_USDC;
+  const fallback = process.env.NETWORK === "avalanche" ? 0.5 : 0;
+  const value = raw === undefined || raw === "" ? fallback : Number(raw);
+  return Number.isFinite(value) && value > 0 ? Math.round(value * 1_000_000) : 0;
+}
+
 /** Minutos que dura un pedido sin pagar antes de vencer (ORDER_TTL_MINUTES, por defecto 60). */
 export function orderTtlMinutes(): number {
   const value = Number(process.env.ORDER_TTL_MINUTES ?? 60);
@@ -367,6 +380,11 @@ export function createOrder(
       };
       total += lineTotal(line);
       lines.push(line);
+    }
+
+    const minimum = minOrderAtomic();
+    if (total < minimum) {
+      throw new Error(`El pedido mínimo es de ${formatUsdc(minimum)} USDC y este suma ${formatUsdc(total)} USDC. Agrega algo más al pedido.`);
     }
 
     db.prepare(

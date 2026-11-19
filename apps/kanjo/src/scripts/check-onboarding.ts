@@ -396,6 +396,50 @@ check("Con el tope de borradores lleno → no se aceptan altas nuevas", /no esta
 process.env.MERCHANT_ONBOARDING = "off";
 check("Con MERCHANT_ONBOARDING=off, /vender va al agente", (await say("tg-6", "/vender")) === null);
 
+console.log("─── Ticket mínimo ───");
+{
+  const pid = (db.prepare("SELECT id FROM products WHERE store_id = 'cafe-kanjo' LIMIT 1").get() as { id: number } | undefined)?.id
+    ?? Number(db.prepare("INSERT INTO products (store_id, name, description, price_atomic, stock) VALUES ('cafe-kanjo', 'Café', '', 20000, 100)").run().lastInsertRowid);
+  db.prepare("UPDATE products SET price_atomic = 20000, stock = 100, unit = 'pieza' WHERE id = ?").run(pid);
+  store.upsertCustomer("tg-70", "Cliente");
+  const orderFor = (qty: number) => store.createOrder("cafe-kanjo", "tg-70", [{ productId: pid, quantity: qty }]);
+  const tryOrder = (qty: number) => { try { return orderFor(qty).order; } catch (error) { return (error as Error).message; } };
+  delete process.env.MIN_ORDER_USDC;
+  process.env.NETWORK = "avalancheFuji";
+  { const r = tryOrder(1); check("En Fuji no hay mínimo por defecto (la demo cobra centavos)", store.minOrderAtomic() === 0 && typeof r === "object"); }
+  process.env.NETWORK = "avalanche";
+  check("En mainnet el mínimo por defecto es 0.50 USDC", store.minOrderAtomic() === 500_000);
+  const ordersBefore = (db.prepare("SELECT COUNT(*) AS n FROM orders").get() as { n: number }).n;
+  const below = tryOrder(1);
+  check("Un pedido de 0.02 USDC en mainnet → se rechaza y dice el mínimo", typeof below === "string" && /mínimo es de 0\.50 USDC y este suma 0\.02 USDC/.test(below));
+  check("…y no crea el pedido", (db.prepare("SELECT COUNT(*) AS n FROM orders").get() as { n: number }).n === ordersBefore);
+  check("Un pedido de 0.50 USDC exactos → pasa", typeof tryOrder(25) === "object");
+  process.env.MIN_ORDER_USDC = "0";
+  check("MIN_ORDER_USDC=0 lo apaga también en mainnet", store.minOrderAtomic() === 0 && typeof tryOrder(1) === "object");
+  process.env.MIN_ORDER_USDC = "1.25";
+  check("MIN_ORDER_USDC=1.25 → 1.25 USDC", store.minOrderAtomic() === 1_250_000);
+  delete process.env.MIN_ORDER_USDC;
+  process.env.NETWORK = "avalancheFuji";
+}
+
+console.log("─── /feedback ───");
+{
+  const { recordFeedback, FEEDBACK_PER_DAY } = await import("../feedback.js");
+  check("/feedback sin texto → explica cómo mandarlo", /\/feedback lo que te gustó/.test(recordFeedback(CLIENTE, "  ")));
+  check("Un comentario muy largo → pide acortarlo", /muy largo/.test(recordFeedback(CLIENTE, "x".repeat(1001))));
+  const thanks = recordFeedback(CLIENTE, "Me gustó pagar desde el chat");
+  const notice = db.prepare("SELECT recipient, body FROM outbox WHERE dedupe_key LIKE 'feedback:%' ORDER BY id DESC").get() as { recipient: string; body: string } | undefined;
+  check("Un comentario → gracias y le llega al admin con quién lo mandó", /Gracias/.test(thanks) && notice?.recipient === ADMIN && /Comentario.*tg-3[\s\S]*Me gustó pagar desde el chat/.test(notice.body));
+  const before = (db.prepare("SELECT COUNT(*) AS n FROM outbox WHERE dedupe_key LIKE 'feedback:%'").get() as { n: number }).n;
+  recordFeedback(ADMIN, "nota del admin");
+  check("El admin puede dejar notas, pero no se avisa a sí mismo", (db.prepare("SELECT COUNT(*) AS n FROM outbox WHERE dedupe_key LIKE 'feedback:%'").get() as { n: number }).n === before);
+  for (let i = 1; i < FEEDBACK_PER_DAY; i++) recordFeedback(CLIENTE, `idea ${i}`);
+  check(`Más de ${FEEDBACK_PER_DAY} al día → se agradece y se pide esperar`, /Mañana puedes mandar más/.test(recordFeedback(CLIENTE, "otra más")));
+  const { forgetCustomer } = await import("../retention.js");
+  forgetCustomer(CLIENTE);
+  check("/olvidarme quita el id del cliente y conserva los comentarios", (db.prepare("SELECT COUNT(*) AS n FROM feedback WHERE customer_id = ?").get(CLIENTE) as { n: number }).n === 0 && (db.prepare("SELECT COUNT(*) AS n FROM feedback WHERE customer_id IS NULL").get() as { n: number }).n === FEEDBACK_PER_DAY);
+}
+
 db.close();
 cleanup();
 console.log(failures === 0 ? "\n✅ Todas las pruebas pasaron" : `\n❌ ${failures} prueba(s) fallaron`);

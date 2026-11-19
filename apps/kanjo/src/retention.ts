@@ -74,6 +74,7 @@ export function forgetCustomer(customerId: string): { conversations: number } {
     db.prepare("DELETE FROM inbox_messages WHERE wa_from = ? AND status != 'pending'").run(customerId);
     db.prepare("UPDATE inbox_messages SET name = '' WHERE wa_from = ?").run(customerId);
     db.prepare("UPDATE customers SET name = '' WHERE wa_id = ?").run(customerId);
+    db.prepare("UPDATE feedback SET customer_id = NULL WHERE customer_id = ?").run(customerId);
     db.exec("COMMIT");
     return { conversations };
   } catch (error) {

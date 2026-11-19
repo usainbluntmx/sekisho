@@ -127,6 +127,19 @@ if (!hasColumn("orders", "pay_token")) {
   db.exec("ALTER TABLE orders ADD COLUMN pay_token TEXT");
 }
 
+// Comentarios de usuarios (/feedback): le llegan al admin y se guardan para revisarlos.
+// /olvidarme quita el id del cliente y conserva el texto, que no lleva su nombre.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS feedback (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id TEXT,
+    store_id    TEXT,
+    text        TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_feedback_customer ON feedback (customer_id, created_at);
+`);
+
 // Reembolsos que el comercio hizo desde su propia wallet, verificados en la cadena (una fila por transacción).
 // Kanjō nunca mueve el dinero: solo comprueba la transferencia de USDC hacia quien pagó y le avisa al cliente.
 db.exec(`

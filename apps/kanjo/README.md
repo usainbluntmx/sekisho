@@ -115,7 +115,10 @@ In the Docker image the same tools are `node dist/scripts/store-profile.js`, `st
 - **Sale by piece or by weight:** each product is sold by `pieza` or by `kg`. For `kg` products the price is per kilo and the customer asks in kilos with up to 3 decimals ("medio kilo" = 0.5, minimum 50 g, maximum 100 kg per line). Weight and stock are stored in whole grams, and each line is rounded to the cent, so the line amounts the agent says add up to exactly what is charged. The catalog import detects prices per kilo (`unit: kg`).
 - **Unpaid orders expire** after `ORDER_TTL_MINUTES` (60 by default). An expired payment link no longer charges, and the agent offers to place the order again. An order with a payment in progress is never expired, and if its payment settled on-chain anyway, the order is still marked paid: a charge is never lost. Stock is only taken when an order is paid, so expiring returns nothing.
 - **Voice with [ElevenLabs](https://elevenlabs.io):** speech-to-text for incoming voice notes and spoken replies (Ogg/Opus voice notes on WhatsApp, MP3 on the web). Spoken replies drop links, ids and formatting and read amounts out loud; a reply with a payment link always goes as text.
-- **Data retention and privacy:** once a day Kanjō deletes what is no longer needed: conversations older than `CONVERSATION_RETENTION_DAYS` (30; the agent only reads the last `HISTORY_HOURS`), catalog previews older than 7 days, cancelled orders that were never paid older than `ORDER_RETENTION_DAYS` (90), sent or failed notices older than 30 days, and used or expired wallet links older than 30 days. Paid orders, payments and splits are kept: they are the store's sales record. A customer can write `/olvidarme` (then `/olvidarme confirmo`) to delete their conversation and their name; their orders stay, without the name.
+- **Data retention and privacy:** once a day Kanjō deletes what is no longer needed: conversations older than `CONVERSATION_RETENTION_DAYS` (30; the agent only reads the last `HISTORY_HOURS`), catalog previews older than 7 days, cancelled orders that were never paid older than `ORDER_RETENTION_DAYS` (90), sent or failed notices older than 30 days, and used or expired wallet links older than 30 days. Paid orders, payments and splits are kept: they are the store's sales record. A customer can write `/olvidarme` (then `/olvidarme confirmo`) to delete their conversation and their name; their orders stay, without the name, and any feedback they sent stays without their id.
+- **Feedback:** anyone (customer or merchant, even halfway through creating a store) can write `/feedback <text>`. It is saved in the `feedback` table and sent to the admin (`KANJO_ADMIN_ID`) with who sent it and from which store. Up to 1,000 characters and 5 messages per person per day.
+- **Minimum order:** with `MIN_ORDER_USDC` (0.50 by default on mainnet) an order below the minimum is not created, and the chat agent or the MCP client gets a message with the minimum and the order's total.
+- **Network guard:** on start Kanjō asks the RPC for its chain id. If it is not the network in `NETWORK` (for example a mainnet RPC while running on Fuji), it logs why and exits, so payments are never settled on the wrong network. If the RPC does not answer, it only warns.
 - **Safety:**
   - no overselling: stock is checked before charging, and a paid order without stock is flagged, never lost;
   - no double charges: a settlement lock per order and one row per transaction;
@@ -129,7 +132,7 @@ One bot serves every store. Customers reach a store through its link, and from t
 
 1. Create a bot with [@BotFather](https://t.me/BotFather) (`/newbot`). Use a new bot, not the ops alert bot.
 2. Set `TELEGRAM_CHANNEL=on`, `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` (`openssl rand -hex 32`), and restart.
-3. Run `npm run telegram:setup` (in Docker: `node dist/scripts/telegram-setup.js` from `/app`). It registers the webhook and prints the link of every store. `--info` shows the webhook status and its last error; `--links` prints the links only. It also registers the command menu (Telegram's `/` button): customers see `/start`, `/vender`, `/reiniciar` and `/olvidarme`, and the admin (`KANJO_ADMIN_ID`, when it is a `tg-` id) also sees the admin commands, in their chat only. `--commands` registers the menu alone, without touching the webhook.
+3. Run `npm run telegram:setup` (in Docker: `node dist/scripts/telegram-setup.js` from `/app`). It registers the webhook and prints the link of every store. `--info` shows the webhook status and its last error; `--links` prints the links only. It also registers the command menu (Telegram's `/` button): customers see `/start`, `/vender`, `/reiniciar`, `/olvidarme` and `/feedback`, and the admin (`KANJO_ADMIN_ID`, when it is a `tg-` id) also sees the admin commands, in their chat only. `--commands` registers the menu alone, without touching the webhook.
 
 Details:
 
@@ -194,11 +197,12 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 
 | Variable | Required | Meaning |
 | --- | --- | --- |
-| `MERCHANT_ADDRESS` | yes | Store wallet, owner of the SplitVault |
+| `MERCHANT_ADDRESS` | on Fuji | Wallet of the demo store (Café Kanjō). Not needed on mainnet, where the demo is never created |
 | `OPERATOR_PRIVATE_KEY` | yes | Hot key that settles and splits. Needs AVAX |
 | `ANTHROPIC_API_KEY` | yes | Claude API key for the agent |
 | `PUBLIC_BASE_URL` | yes | Public URL used in payment links |
 | `NETWORK` | no | `avalancheFuji` (default) or `avalanche` |
+| `AVALANCHE_RPC_URL` | recommended | Your own RPC **for the network in `NETWORK`**. On start, Kanjō checks the RPC's chain id and refuses to start if it belongs to the other network |
 | `STORE_ID`, `STORE_NAME` | no | Store seeded on start, and the default store for customers who have not chosen one |
 | `DISTRIBUTE_*` | no | Split policy (batch by default) |
 | `WHATSAPP_*`, `NOTIFY_CHANNEL`, `MERCHANT_WA_ID` | for WhatsApp | Cloud API credentials and where notices go (`MERCHANT_WA_ID` can be a `tg-<chat_id>`) |
@@ -206,6 +210,7 @@ Every variable is documented in [`.env.example`](.env.example). The service chec
 | `ELEVENLABS_*`, `VOICE_WEB`, `VOICE_REPLIES` | for voice | ElevenLabs key and voice, and which channels speak |
 | `MCP_CHANNEL`, `MCP_MAX_PENDING`, `MCP_MAX_PENDING_PER_CLIENT`, `MCP_PER_MINUTE` | for agents | Turns on `/mcp` and its limits (unpaid orders in total and per client, requests per minute) |
 | `ORDER_TTL_MINUTES` | no | Minutes an unpaid order lasts (5 to 10080, default 60) |
+| `MIN_ORDER_USDC` | no | Minimum order total in USDC. Default 0.50 on mainnet (below ~0.38 the 1.5% fee does not cover the gas of settling and splitting) and none on Fuji. `0` turns it off |
 | `TELEGRAM_CHANNEL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` | for Telegram | Turns on `/telegram/webhook`, the bot token from BotFather, and the webhook secret |
 | `TELEGRAM_MAX_MESSAGES`, `TELEGRAM_WINDOW_MINUTES` | no | Messages per person per window (default 20 per 10 min) |
 | `MERCHANT_ONBOARDING`, `KANJO_ADMIN_ID`, `ONBOARDING_MAX_DRAFTS`, `ONBOARDING_DRAFT_DAYS` | for onboarding | Turns on store creation from the chat, who approves stores (`tg-<chat_id>` or a WhatsApp number), the cap on unpublished stores, and the days after which an inactive draft is deleted. Needs `FX_MXN_PER_USDC` |

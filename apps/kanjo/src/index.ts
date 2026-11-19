@@ -22,6 +22,7 @@ import {
 import { startDistributionScheduler } from "./distributor.js";
 import { NETWORK } from "./network.js";
 import { facilitator, operator, sekisho } from "./payments/usdc-sekisho.js";
+import { checkRpcChain, chainName } from "./rpc-guard.js";
 import { registerMcp, MCP_PATH } from "./mcp.js";
 import { startOutboxWorker } from "./outbox.js";
 import { expireStaleDrafts, skipsChatLimit } from "./onboarding.js";
@@ -281,6 +282,19 @@ console.log(
   `[kanjo] Red: ${NETWORK} (eip155:${sekisho.config.chain.id}) · factory ${sekisho.config.factory} · operador ${operator.address}`
 );
 if (NETWORK === "avalanche") console.warn("[kanjo] MAINNET: los pagos usan USDC real.");
+
+// Guarda de red: la RPC debe ser de la red de NETWORK, o los pagos se liquidarían en la red equivocada
+const rpc = await checkRpcChain(() => sekisho.publicClient.getChainId(), sekisho.config.chain.id);
+if (rpc.status === "mismatch") {
+  console.error(
+    `[kanjo] La RPC es de ${chainName(rpc.actual)}, pero NETWORK=${NETWORK} espera ${chainName(sekisho.config.chain.id)}. ` +
+      (NETWORK === "avalanche" ? "Revisa AVALANCHE_RPC_URL." : "Revisa AVALANCHE_RPC_URL y AVALANCHE_FUJI_RPC_URL (en Fuji, AVALANCHE_RPC_URL debe ser de Fuji o ir vacía).") +
+      " Kanjō no arranca."
+  );
+  process.exit(1);
+}
+if (rpc.status === "unreachable") console.warn(`[kanjo] No pude comprobar la red de la RPC (${rpc.error}); sigo y lo verá el monitor.`);
+else console.log(`[kanjo] RPC verificada: ${chainName(rpc.actual)}`);
 
 // Reparto por lotes de los vaults
 startDistributionScheduler();

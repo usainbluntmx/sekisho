@@ -23,9 +23,11 @@ function positiveNumber(name: string): void {
 
 required("OPERATOR_PRIVATE_KEY", (v) => /^0x[0-9a-fA-F]{64}$/.test(v), "0x + 64 caracteres hexadecimales");
 required("ANTHROPIC_API_KEY");
-required("MERCHANT_ADDRESS", (v) => /^0x[0-9a-fA-F]{40}$/.test(v), "dirección 0x de 40 caracteres hexadecimales");
 required("PUBLIC_BASE_URL", (v) => /^https?:\/\/\S+$/.test(v), "URL que empiece con http:// o https://");
 const network = env.NETWORK || "avalancheFuji";
+// La wallet de la tienda demo (Café Kanjō) solo hace falta en Fuji: en mainnet la demo no se crea
+if (network !== "avalanche") required("MERCHANT_ADDRESS", (v) => /^0x[0-9a-fA-F]{40}$/.test(v), "dirección 0x de 40 caracteres hexadecimales");
+else if (env.MERCHANT_ADDRESS && !/^0x[0-9a-fA-F]{40}$/.test(env.MERCHANT_ADDRESS)) problems.push("MERCHANT_ADDRESS: formato inválido (dirección 0x de 40 caracteres hexadecimales)");
 if (!["avalancheFuji", "avalanche"].includes(network)) {
   problems.push(`NETWORK: debe ser "avalancheFuji" o "avalanche" (es "${network}")`);
 }
@@ -74,6 +76,11 @@ if (env.MERCHANT_ONBOARDING === "on") {
 }
 positiveNumber("ONBOARDING_MAX_DRAFTS");
 positiveNumber("ONBOARDING_DRAFT_DAYS");
+
+// Ticket mínimo por pedido, en USDC (0 = sin mínimo). Por defecto: 0.50 en mainnet, sin mínimo en Fuji
+if (env.MIN_ORDER_USDC !== undefined && env.MIN_ORDER_USDC !== "" && !(Number(env.MIN_ORDER_USDC) >= 0)) {
+  problems.push("MIN_ORDER_USDC: debe ser un número mayor o igual a 0 (en USDC, por ejemplo 0.50)");
+}
 
 // Caducidad de pedidos sin pagar: minutos enteros entre 5 y 10080 (7 días)
 if (env.ORDER_TTL_MINUTES) {
